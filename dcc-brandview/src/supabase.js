@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// The client adds /rest/v1 itself, so strip it if it was pasted into the URL.
+const url = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/(rest\/v1\/?)?$/, '');
+const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 
 export const configMissing = !url || !key;
 
