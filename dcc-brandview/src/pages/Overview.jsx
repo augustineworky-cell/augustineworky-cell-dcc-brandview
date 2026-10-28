@@ -1,6 +1,8 @@
-import { rpc } from '../supabase.js';
+import { useState } from 'react';
+import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, inWords, prevRange, presetRange, pctChange, daysBetween, cleanItem, cleanParty, fmtD } from '../lib/format.js';
-import { useLoad, Skel, LoadingCard, Empty, ErrorState } from '../components/ui.jsx';
+import { downloadXlsx, fetchAllLines } from '../lib/tally.js';
+import { useLoad, Skel, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
 import { PageHead, DailyChart, Change, scopeLabel } from '../components/Parts.jsx';
 
 export default function Overview({ ctx }) {
@@ -18,7 +20,35 @@ export default function Overview({ ctx }) {
     return { cur: cur[0], prev: prev[0], daily, products, outlets, invoices };
   }, [ctx.from, ctx.to, ctx.loc, ctx.brand]);
 
-  const head = <PageHead ctx={ctx} crumb={<><span className="live" style={{ background: '#4cb782', color: '#4cb782', width: 6, height: 6 }} />{scopeLabel(ctx)}</>} title="Sales overview" />;
+  const [busy, setBusy] = useState(false);
+  const downloadAll = async () => {
+    setBusy(true);
+    try {
+      const lines = await fetchAllLines(supabase, { from: ctx.from, to: ctx.to, loc: ctx.loc, brand: ctx.brand });
+      const brandNames = Object.fromEntries(ctx.brands.map((b) => [b.id, b.name]));
+      const rows = lines.map((l) => ({
+        ...l, type: l.is_return ? 'Return' : 'Sale', brand: brandNames[l.brand_id] || '',
+        qty: Number(l.qty), rate: Number(l.rate), amount: Number(l.amount), gst: Number(l.gst), total_amount: Number(l.total_amount)
+      }));
+      downloadXlsx(`${ctx.brandName} sales lines ${ctx.from} to ${ctx.to}.xlsx`, 'Sales lines',
+        [['Date', 'document_date'], ['Invoice', 'document_no'], ['Type', 'type'], ['Warehouse', 'location'], ['Brand', 'brand'], ['Outlet', 'party_name', 'wide'],
+          ['Item code', 'item_code'], ['Item', 'item_name', 'wide'], ['Qty', 'qty'], ['UOM', 'uom'], ['Rate', 'rate'], ['Taxable', 'amount'], ['GST', 'gst'], ['Total', 'total_amount']],
+        rows);
+      logActivity('export', { page: 'all-lines', from: ctx.from, to: ctx.to });
+      ctx.notify(`Downloaded ${rows.length} lines`);
+    } catch (e) {
+      ctx.notify(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const downloadBtn = (
+    <button className="btn btn-pri" disabled={busy} onClick={downloadAll}>
+      {busy ? <span className="spinner" /> : Icon.download()} Download everything
+    </button>
+  );
+
+  const head = <PageHead ctx={ctx} crumb={<><span className="live" style={{ background: '#4cb782', color: '#4cb782', width: 6, height: 6 }} />{scopeLabel(ctx)}</>} title="Sales overview">{downloadBtn}</PageHead>;
 
   if (loading && !data) return <main className="page">{head}<Kskel /><div className="grid"><LoadingCard rows={8} /><LoadingCard rows={8} /></div></main>;
   if (error) return <main className="page">{head}<div className="card"><ErrorState message={error} onRetry={reload} /></div></main>;

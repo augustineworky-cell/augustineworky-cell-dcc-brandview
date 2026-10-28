@@ -125,3 +125,20 @@ export function downloadXlsx(filename, sheetName, columns, rows) {
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   XLSX.writeFile(wb, filename);
 }
+
+const LINE_COLS = 'document_date, document_no, trans_type, is_return, location, party_name, item_code, item_name, qty, uom, rate, amount, gst, total_amount, brand_id';
+
+/** Reads every sales line for the filters, 1000 rows at a time. RLS limits brand users to their own brand. */
+export async function fetchAllLines(supabase, { from, to, loc, brand }) {
+  const all = [];
+  for (let start = 0; ; start += 1000) {
+    let q = supabase.from('sales_lines').select(LINE_COLS)
+      .gte('document_date', from).lte('document_date', to);
+    if (loc) q = q.eq('location', loc);
+    if (brand) q = q.eq('brand_id', brand);
+    const { data, error } = await q.order('document_date').order('document_no').range(start, start + 999);
+    if (error) throw new Error(error.message);
+    all.push(...data);
+    if (data.length < 1000) return all;
+  }
+}

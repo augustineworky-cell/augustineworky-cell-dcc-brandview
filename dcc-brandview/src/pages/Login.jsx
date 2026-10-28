@@ -16,7 +16,7 @@ const TILES = [
   { no: 'DOC/26-27/3532', t: 'Zomato Hyperpure – DEL4', c: 'Okhla', d: '#5e6ad2', a: '₹45,564' },
   { no: 'OUTLET', t: 'Bhai Ji Foods · no order 22 days', c: 'Idle', d: '#f2994a', a: 'Follow up' }
 ];
-const GRID = Array.from({ length: 24 }, (_, i) => ({ ...TILES[(i * 7) % TILES.length], delay: ((i * 2.3) % 9).toFixed(1) + 's' }));
+const GRID = Array.from({ length: 35 }, (_, i) => ({ ...TILES[(i * 7) % TILES.length], delay: ((i * 2.3) % 9).toFixed(1) + 's' }));
 
 export default function Login() {
   const [email, setEmail] = useState('');

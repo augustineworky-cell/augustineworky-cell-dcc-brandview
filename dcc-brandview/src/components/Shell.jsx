@@ -6,7 +6,8 @@ export const PAGES = [
   { id: 'overview', label: 'Overview', icon: Icon.overview },
   { id: 'products', label: 'Products', icon: Icon.box },
   { id: 'outlets', label: 'Outlets', icon: Icon.store },
-  { id: 'invoices', label: 'Invoices', icon: Icon.doc }
+  { id: 'invoices', label: 'Invoices', icon: Icon.doc },
+  { id: 'downloads', label: 'Downloads', icon: Icon.download, to: 'overview' }
 ];
 
 export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignOut }) {
@@ -33,7 +34,7 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
       </label>
       <div className="navlinks">
         {PAGES.map((p) => (
-          <button key={p.id} className={'tlink' + (page === p.id ? ' on' : '')} aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.id)}>{p.label}</button>
+          <button key={p.id} className={'tlink' + (page === p.id ? ' on' : '')} aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.to || p.id)}>{p.label}</button>
         ))}
         {isAdmin && <button className={'tlink' + (page === 'admin' ? ' on' : '')} onClick={() => go('admin')}>Admin</button>}
       </div>
@@ -62,7 +63,7 @@ export function TabBar({ page, go, isAdmin }) {
   return (
     <nav className="tabbar" aria-label="Main">
       {items.map((p) => (
-        <button key={p.id} className={page === p.id ? 'on' : ''} aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.id)}>
+        <button key={p.id} className={page === p.id ? 'on' : ''} aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.to || p.id)}>
           {p.icon(20)}{p.label}
         </button>
       ))}
