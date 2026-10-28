@@ -40,7 +40,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
     setBusy(false);
     if (error) {
-      setErr(/invalid/i.test(error.message) ? 'Wrong email or password.' : error.message);
+      setErr(/invalid login credentials/i.test(error.message) ? 'Wrong email or password.' : error.message);
       setShake((n) => n + 1);
     }
   }
