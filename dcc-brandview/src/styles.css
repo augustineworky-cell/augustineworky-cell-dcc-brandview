@@ -311,3 +311,17 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* login performance fix */
+.stage { contain: strict; }
+.plane { will-change: transform; }
+.tile { animation: none !important; box-shadow: none; position: relative; }
+.tile:nth-child(3n+1)::after {
+  content: ""; position: absolute; inset: -1px; border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 0 50px -10px rgba(94,106,210,0.45);
+  opacity: 0; will-change: opacity;
+  animation: tileglow 9s ease-in-out infinite; animation-delay: inherit;
+}
+@keyframes tileglow { 0%,100% { opacity: 0; } 45%,55% { opacity: 1; } }
+.lform { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(14,15,18,0.97); }
