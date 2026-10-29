@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export function DccMark({ size = 28, dark = false }) {
-  const tile = dark ? '#15171b' : '#f7f8f8';
-  const ink = dark ? '#f7f8f8' : '#111215';
+  const tile = dark ? '#15171b' : 'var(--mark-tile, #f7f8f8)';
+  const ink = dark ? '#f7f8f8' : 'var(--mark-ink, #111215)';
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" role="img" aria-label="DCC">
       <rect width="22" height="22" rx="4" fill={tile} />
@@ -48,6 +48,9 @@ export const Icon = {
   shield: (s = 14) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} stroke="#4cb782" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></svg>,
   alert: (s = 22) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} stroke="#eb5757" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5v.5" /></svg>,
   empty: (s = 28) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} stroke="#9ba3f5" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4M9 15h6" /></svg>,
+  sun: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>,
+  moon: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" /></svg>,
+  stack: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} aria-hidden="true"><path d="M8 3h9l4 4v11H8z" /><path d="M16 3v5h5" /><path d="M5 6v15h11" /></svg>,
   check: (s = 15) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} stroke="#4cb782" strokeWidth="2.4" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>,
   retry: (s = 14) => <svg width={s} height={s} viewBox="0 0 24 24" {...P} aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>
 };

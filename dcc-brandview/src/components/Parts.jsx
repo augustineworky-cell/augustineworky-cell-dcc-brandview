@@ -56,7 +56,7 @@ export function DailyChart({ rows, loc, height = 220 }) {
           {[4, 3, 2, 1, 0].map((i) => <span key={i}>{i ? rsShort(step * i) : '0'}</span>)}
         </div>
         <div className="plot">
-          <div className="bars" style={{ height, backgroundSize: `100% ${height / 4}px`, background: `repeating-linear-gradient(to top, transparent 0, transparent ${height / 4 - 1}px, rgba(255,255,255,0.05) ${height / 4 - 1}px, rgba(255,255,255,0.05) ${height / 4}px)` }}>
+          <div className="bars" style={{ height, backgroundSize: `100% ${height / 4}px`, background: `repeating-linear-gradient(to top, transparent 0, transparent ${height / 4 - 1}px, var(--grid) ${height / 4 - 1}px, var(--grid) ${height / 4}px)` }}>
             {keys.map((k, i) => (
               <div className="day" key={k}>
                 {loc !== 'Gurgaon' && <div className="b" style={{ height: px(byDay[k].Okhla), background: 'var(--okhla)', animationDelay: (0.3 + i * 0.025).toFixed(2) + 's' }} />}

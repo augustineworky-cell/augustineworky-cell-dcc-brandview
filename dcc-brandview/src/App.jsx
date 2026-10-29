@@ -69,6 +69,12 @@ export default function App() {
   const [page, setPage] = useState(pageFromHash());
   const [toast, setToast] = useState(null);
   const [invSearch, setInvSearch] = useState('');
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('bv-theme') || 'dark'; } catch { return 'dark'; } });
+  const toggleTheme = () => setTheme((t) => { const n = t === 'light' ? 'dark' : 'light'; try { localStorage.setItem('bv-theme', n); } catch { /* private mode */ } return n; });
+  useEffect(() => {
+    document.body.style.background = profile && theme === 'light' ? '#f6f7f9' : '';
+    return () => { document.body.style.background = ''; };
+  }, [theme, profile]);
   const [f, setF] = useState(() => { const [from, to] = presetRange('month'); return { preset: 'month', from, to, loc: null }; });
 
   const notify = useCallback((msg, err = false) => {
@@ -128,8 +134,8 @@ export default function App() {
   const view = page === 'admin' && isAdmin ? 'admin' : (['overview', 'products', 'outlets', 'invoices', 'report'].includes(page) ? page : 'overview');
 
   return (
-    <div className="app">
-      <TopBar page={view} go={go} profile={profile} brands={brands} brandId={brandId} setBrandId={setBrandId} onSignOut={signOut} />
+    <div className="app" data-theme={theme}>
+      <TopBar page={view} go={go} profile={profile} brands={brands} brandId={brandId} setBrandId={setBrandId} onSignOut={signOut} theme={theme} toggleTheme={toggleTheme} />
       {view === 'overview' && <Overview ctx={ctx} />}
       {view === 'products' && <Products ctx={ctx} />}
       {view === 'outlets' && <Outlets ctx={ctx} />}

@@ -142,8 +142,8 @@ export default function SalesReport({ ctx }) {
       <div className="controls">
         <label className="dates" style={{ gap: 8 }}>
           <span className="muted" style={{ display: 'flex' }}>{Icon.cal()}</span>
-          <select aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ background: 'transparent', color: 'var(--text)', border: 0, outline: 'none', fontSize: 13, colorScheme: 'dark' }}>
-            {monthOptions.map((m) => <option key={m} value={m} style={{ background: '#111215' }}>{monthLabel(m)}</option>)}
+          <select aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ background: 'transparent', color: 'var(--text)', border: 0, outline: 'none', fontSize: 13 }}>
+            {monthOptions.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
           </select>
         </label>
         <div className="seg" role="group" aria-label="Value">

@@ -11,7 +11,7 @@ export const PAGES = [
   { id: 'downloads', label: 'Downloads', icon: Icon.download, to: 'overview' }
 ];
 
-export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignOut }) {
+export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignOut, theme, toggleTheme }) {
   const [open, setOpen] = useState(false);
   const isAdmin = profile.role === 'admin';
   const current = brands.find((b) => b.id === brandId);
@@ -21,7 +21,7 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
       <a href="#/overview" onClick={(e) => { e.preventDefault(); go('overview'); }}><Lockup /></a>
       <span className="slash" aria-hidden="true">/</span>
       <label className="brandchip">
-        <span className="bdot" style={{ background: chipBrand ? chipBrand.color + '22' : '#1c1e24', color: chipBrand ? chipBrand.color : '#b4b8c0' }}>
+        <span className="bdot" style={{ background: chipBrand ? chipBrand.color + '22' : 'var(--hover)', color: chipBrand ? chipBrand.color : 'var(--text-2)' }}>
           {chipBrand ? initials(chipBrand.name) : 'ALL'}
         </span>
         {isAdmin ? (
@@ -40,6 +40,9 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
         {isAdmin && <button className={'tlink' + (page === 'admin' ? ' on' : '')} onClick={() => go('admin')}>Admin</button>}
       </div>
       <div className="tright">
+        <button className="iconbtn themebtn" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+          {theme === 'light' ? Icon.moon() : Icon.sun()}
+        </button>
         <div className="menu">
           <button className="avatar" aria-label="Account" aria-expanded={open} onClick={() => setOpen(!open)}>{initials(profile.full_name)}</button>
           {open && (

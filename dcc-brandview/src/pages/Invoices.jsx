@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, inWords, fmtD, fmtDY, cleanItem, cleanParty } from '../lib/format.js';
-import { downloadXlsx } from '../lib/tally.js';
+import { downloadXlsx, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Skel, Icon } from '../components/ui.jsx';
 import { PageHead, scopeLabel } from '../components/Parts.jsx';
 
@@ -13,6 +13,7 @@ export default function Invoices({ ctx }) {
   const [dq, setDq] = useState(q);
   const [limit, setLimit] = useState(PAGE);
   const [sel, setSel] = useState(null);
+  const [bulk, setBulk] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setDq(q.trim()), 300); return () => clearTimeout(t); }, [q]);
   useEffect(() => { setLimit(PAGE); }, [dq, type, ctx.from, ctx.to, ctx.loc, ctx.brand]);
@@ -39,6 +40,7 @@ export default function Invoices({ ctx }) {
   const c = counts.data;
   const head = (
     <PageHead ctx={ctx} crumb={scopeLabel(ctx)} title="Invoices">
+      <button className={'btn' + (bulk ? ' on' : '')} onClick={() => setBulk(!bulk)} aria-expanded={bulk}>{Icon.stack()} Bulk download</button>
       <button className="btn btn-pri" onClick={() => exportList().catch((e) => ctx.notify(e.message, true))}>{Icon.download()} Export</button>
     </PageHead>
   );
@@ -48,6 +50,7 @@ export default function Invoices({ ctx }) {
   return (
     <main className="page">
       {head}
+      {bulk && <Bulk ctx={ctx} onClose={() => setBulk(false)} />}
       <div className="controls" style={{ justifyContent: 'space-between' }}>
         <div className="seg" role="group" aria-label="Invoice type">
           <button className={type === null ? 'on' : ''} onClick={() => setType(null)}>All{c ? ` · ${Number(c.sales_bills) + Number(c.return_bills)}` : ''}</button>
@@ -171,3 +174,126 @@ function Receiving({ inv }) {
     </div>
   );
 }
+
+/* ---------- Bulk: paste many invoice numbers, download all receiving copies + details ---------- */
+const BULK_COLS = 'document_date, document_no, trans_type, is_return, location, party_name, customer_code, customer_group, item_group, item_code, item_name, qty, uom, rate, discount_pct, amount, gst_pct, gst, total_amount, brand_id, raw';
+const ZIP_BATCH = 40;
+
+function Bulk({ ctx, onClose }) {
+  const [text, setText] = useState('');
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState('');
+  const wanted = [...new Set(text.toUpperCase().split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /\d/.test(x) && x.includes('/')))];
+
+  async function find() {
+    if (!wanted.length) { ctx.notify('Paste at least one invoice number, e.g. DOC/26-27/3535', true); return; }
+    if (wanted.length > 500) { ctx.notify('Up to 500 invoices at a time', true); return; }
+    setBusy('find'); setRes(null);
+    try {
+      const lines = [];
+      for (let i = 0; i < wanted.length; i += 80) {
+        let q = supabase.from('sales_lines').select(BULK_COLS).in('document_no', wanted.slice(i, i + 80));
+        if (ctx.brand) q = q.eq('brand_id', ctx.brand);
+        const { data, error } = await q.order('document_no').limit(20000);
+        if (error) throw new Error(error.message);
+        lines.push(...data);
+      }
+      const links = await fetchDocLinks(supabase, lines.map((l) => l.document_no));
+      const by = new Map();
+      for (const l of lines) {
+        const o = by.get(l.document_no) || { document_no: l.document_no, date: l.document_date, party: l.party_name, location: l.location, is_return: l.is_return, total: 0, items: 0 };
+        o.total += Number(l.total_amount); o.items++; by.set(l.document_no, o);
+      }
+      const found = wanted.filter((d) => by.has(d)).map((d) => ({ ...by.get(d), pdf: links[d] || null }));
+      setRes({ found, missing: wanted.filter((d) => !by.has(d)), lines, links });
+      logActivity('bulk_find', { count: wanted.length });
+    } catch (e) { ctx.notify(e.message, true); } finally { setBusy(''); }
+  }
+
+  async function zip() {
+    const docs = res.found.filter((r) => r.pdf).map((r) => r.document_no);
+    const parts = Math.ceil(docs.length / ZIP_BATCH);
+    try {
+      for (let p = 0; p < parts; p++) {
+        setBusy(`Preparing ZIP ${parts > 1 ? `${p + 1} of ${parts}` : ''}…`);
+        const { data, error } = await supabase.functions.invoke('receiving-zip', { body: { docs: docs.slice(p * ZIP_BATCH, (p + 1) * ZIP_BATCH) } });
+        if (error) {
+          let msg = error.message;
+          try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch { /* keep */ }
+          if (/failed to send|not found|404/i.test(msg)) msg = 'ZIP download is not set up in Supabase yet (receiving-zip function).';
+          throw new Error(msg);
+        }
+        const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/zip' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${ctx.brandName} receiving copies${parts > 1 ? ` (${p + 1} of ${parts})` : ''}.zip`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      }
+      logActivity('bulk_zip', { count: docs.length });
+      ctx.notify(`Downloaded ${docs.length} receiving copies`);
+    } catch (e) { ctx.notify(e.message, true); } finally { setBusy(''); }
+  }
+
+  function excel() {
+    const brandNames = Object.fromEntries(ctx.brands.map((b) => [b.id, b.name]));
+    downloadMasterXlsx(`${ctx.brandName} selected invoices.xlsx`, res.lines, res.links, brandNames);
+    logActivity('bulk_excel', { count: res.found.length });
+    ctx.notify(`Downloaded ${res.found.length} invoices`);
+  }
+
+  const withPdf = res ? res.found.filter((r) => r.pdf).length : 0;
+  return (
+    <section className="card bulk" style={{ display: 'flex', flexDirection: 'column', gap: 14, backgroundImage: 'radial-gradient(ellipse at top left, rgba(94,106,210,0.10), transparent 60%)' }}>
+      <div className="card-h" style={{ marginBottom: 0 }}>
+        <div><h2>Bulk download</h2><span className="sub">Paste invoice numbers – one per line, or separated by commas/spaces. Any dates.</span></div>
+        <button className="iconbtn" onClick={onClose} aria-label="Close bulk download">{Icon.close()}</button>
+      </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={'DOC/26-27/3535\nDOC/26-27/3540\nHR/26-27/2804'} aria-label="Invoice numbers" />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="sub">{wanted.length ? `${wanted.length} invoice number${wanted.length > 1 ? 's' : ''} pasted` : 'Up to 500 at a time'}</span>
+        <span style={{ display: 'flex', gap: 8 }}>
+          {text && <button className="btn" onClick={() => { setText(''); setRes(null); }} disabled={!!busy}>Clear</button>}
+          <button className="btn btn-pri" onClick={find} disabled={!!busy || !wanted.length}>{busy === 'find' ? <><span className="spinner" /> Finding…</> : <>{Icon.search(14)} Find invoices</>}</button>
+        </span>
+      </div>
+
+      {res && (
+        <>
+          <div className="stats">
+            <div className="stat"><span className="sub">Found</span><b>{res.found.length}</b></div>
+            <div className="stat"><span className="sub">With receiving copy</span><b className="pos">{withPdf}</b></div>
+            <div className="stat"><span className="sub">No receiving copy yet</span><b>{res.found.length - withPdf}</b></div>
+            <div className="stat"><span className="sub">Not found</span><b className={res.missing.length ? 'neg' : ''}>{res.missing.length}</b></div>
+          </div>
+          {res.missing.length > 0 && (
+            <div className="sub" style={{ lineHeight: 1.7 }}>Not found {ctx.isAdmin ? '' : 'for your brand'}: <span className="mono">{res.missing.join(', ')}</span></div>
+          )}
+          {res.found.length > 0 && (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <button className="btn btn-pri" onClick={zip} disabled={!!busy || !withPdf}>{busy.startsWith('Preparing') ? <><span className="spinner" /> {busy}</> : <>{Icon.download()} Download {withPdf} receiving copies (ZIP)</>}</button>
+                <button className="btn" onClick={excel} disabled={!!busy}>{Icon.download()} Download details (Excel)</button>
+              </div>
+              <div className="tblwrap" style={{ maxHeight: 360, overflowY: 'auto' }}>
+                <table className="tbl" style={{ minWidth: 640 }}>
+                  <thead><tr><th>Invoice</th><th>Date</th><th>Outlet</th><th className="r">Total</th><th>Receiving copy</th></tr></thead>
+                  <tbody>{res.found.map((r) => (
+                    <tr key={r.document_no}>
+                      <td className="mono" style={{ fontSize: 12 }}>{r.document_no}</td>
+                      <td className="t2 nowrap">{fmtD(r.date)}</td>
+                      <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cleanParty(r.party)}</td>
+                      <td className="r" style={{ fontWeight: 600 }}>{rs(r.total, 2)}</td>
+                      <td>{r.pdf ? <a href={viewUrl(r.pdf)} target="_blank" rel="noopener noreferrer">View</a> : <span className="muted">{r.is_return ? 'credit note' : 'not yet'}</span>}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+const viewUrl = (u) => { const id = driveId(u); return id ? `https://drive.google.com/file/d/${id}/view` : u; };
