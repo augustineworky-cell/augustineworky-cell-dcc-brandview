@@ -7,6 +7,7 @@ export const PAGES = [
   { id: 'products', label: 'Products', icon: Icon.box },
   { id: 'outlets', label: 'Outlets', icon: Icon.store },
   { id: 'invoices', label: 'Invoices', icon: Icon.doc },
+  { id: 'report', label: 'Sales report', icon: Icon.overview },
   { id: 'downloads', label: 'Downloads', icon: Icon.download, to: 'overview' }
 ];
 
