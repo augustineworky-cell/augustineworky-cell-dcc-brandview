@@ -200,7 +200,7 @@ export default function Admin({ ctx }) {
             </div>
           </section>
 
-          <section className="grid">
+          <section>
             <div className="card">
               <div className="card-h"><h2>Upload history</h2></div>
               <div className="tblwrap">
@@ -218,21 +218,9 @@ export default function Admin({ ctx }) {
                 </table>
               </div>
             </div>
-            <div className="card">
-              <div className="card-h"><h2>Logins</h2><span className="sub">{meta.data.profiles.length} people</span></div>
-              <div className="tblwrap">
-                <table className="tbl" style={{ minWidth: 420 }}>
-                  <thead><tr><th>Name</th><th>Role</th><th>Brand</th><th>Status</th></tr></thead>
-                  <tbody>{meta.data.profiles.map((p) => (
-                    <tr key={p.user_id}><td style={{ fontWeight: 500 }}>{p.full_name || '—'}</td><td className="t2">{p.role === 'admin' ? 'Admin' : 'Brand'}</td><td className="t2">{p.role === 'admin' ? 'All brands' : brandName(p.brand_id)}</td><td>{p.active ? <span className="pos">Active</span> : <span className="muted">Disabled</span>}</td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-              <p className="sub" style={{ marginTop: 14, lineHeight: 1.6 }}>
-                To add a brand login: Supabase → Authentication → Add user (tick Auto Confirm), then ask Claude to link that email to the brand in <span className="mono">profiles</span>.
-              </p>
-            </div>
           </section>
+
+          <LoginsCard ctx={ctx} profiles={meta.data.profiles} reload={meta.reload} />
         </>
       )}
     </main>
@@ -337,6 +325,132 @@ function ReceivingCard({ ctx }) {
             </div>
           </>
         )}
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Logins: create brand accounts from the app (via the admin-users Edge Function) ---------- */
+async function adminUsers(body) {
+  const { data, error } = await supabase.functions.invoke('admin-users', { body });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch { /* keep msg */ }
+    if (/failed to send|not found|404/i.test(msg)) msg = 'The admin-users function is not deployed in Supabase yet.';
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+function makePassword() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', a = 'abcdefghijkmnpqrstuvwxyz', d = '23456789';
+  const pick = (s) => s[crypto.getRandomValues(new Uint32Array(1))[0] % s.length];
+  return pick(A) + Array.from({ length: 5 }, () => pick(a)).join('') + '@' + Array.from({ length: 4 }, () => pick(d)).join('');
+}
+const APP_URL = 'https://dcc-brandview.vercel.app';
+
+function LoginsCard({ ctx, profiles, reload }) {
+  const blank = { full_name: '', email: '', brand_id: '', role: 'brand', password: makePassword() };
+  const [f, setF] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [made, setMade] = useState(null);
+  const emails = useLoad(() => adminUsers({ action: 'list' }).then((r) => Object.fromEntries(r.users.map((u) => [u.id, u]))).catch(() => ({})), [profiles.length, made]);
+  const brandName = (id) => ctx.brands.find((b) => b.id === id)?.name || '—';
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  const msgFor = (m) => `Hello ${m.full_name.split(' ')[0]},\n\nYour DCC BrandView login for ${m.brand} sales:\n\nLink: ${APP_URL}\nEmail: ${m.email}\nPassword: ${m.password}\n\nYou can see daily sales, outlets, products, invoices and receiving copies, and download Excel any time.\n\n– DCC MIS`;
+
+  async function create(e) {
+    e.preventDefault(); setBusy('create');
+    try {
+      await adminUsers({ action: 'create', ...f });
+      const m = { ...f, brand: f.role === 'admin' ? 'all brands' : brandName(f.brand_id) };
+      setMade(m); setF(null); reload();
+      ctx.notify('Login created for ' + f.email);
+    } catch (err) { ctx.notify(err.message, true); } finally { setBusy(''); }
+  }
+  async function resetPw(p) {
+    const pw = makePassword();
+    if (!window.confirm(`Set a new password for ${p.full_name}?\n\nNew password: ${pw}`)) return;
+    setBusy(p.user_id);
+    try { await adminUsers({ action: 'set_password', user_id: p.user_id, password: pw }); setMade({ full_name: p.full_name, email: emails.data?.[p.user_id]?.email || '', password: pw, brand: p.role === 'admin' ? 'all brands' : brandName(p.brand_id) }); ctx.notify('Password changed'); }
+    catch (err) { ctx.notify(err.message, true); } finally { setBusy(''); }
+  }
+  async function toggle(p) {
+    if (p.active && !window.confirm(`Disable ${p.full_name}? They will not be able to sign in.`)) return;
+    setBusy(p.user_id);
+    try { await adminUsers({ action: 'set_active', user_id: p.user_id, active: !p.active }); reload(); ctx.notify(p.active ? 'Login disabled' : 'Login enabled'); }
+    catch (err) { ctx.notify(err.message, true); } finally { setBusy(''); }
+  }
+  function copy(text) { navigator.clipboard?.writeText(text).then(() => ctx.notify('Copied – paste it in WhatsApp'), () => ctx.notify('Copy failed', true)); }
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <div><h2>Logins</h2><span className="sub">{profiles.length} people</span></div>
+        {!f && <button className="btn btn-pri" onClick={() => { setF(blank); setMade(null); }}>+ Add login</button>}
+      </div>
+
+      {f && (
+        <form onSubmit={create} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, padding: 16, border: '1px solid var(--line-2)', borderRadius: 12, marginBottom: 16 }}>
+          <label className="fld"><span className="sub">Person name</span><input className="btn" style={{ textAlign: 'left' }} required value={f.full_name} onChange={set('full_name')} placeholder="Arun Kumar" /></label>
+          <label className="fld"><span className="sub">Email (their login)</span><input className="btn" style={{ textAlign: 'left' }} type="email" required value={f.email} onChange={set('email')} placeholder="arun@londondairy.in" /></label>
+          <label className="fld"><span className="sub">Access</span>
+            <select className="btn" value={f.role === 'admin' ? '__admin' : f.brand_id} onChange={(e) => setF({ ...f, role: e.target.value === '__admin' ? 'admin' : 'brand', brand_id: e.target.value === '__admin' ? '' : e.target.value })} required>
+              <option value="">Pick a brand…</option>
+              {ctx.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              <option value="__admin">DCC admin (all brands)</option>
+            </select>
+          </label>
+          <label className="fld"><span className="sub">Password</span>
+            <span style={{ display: 'flex', gap: 6 }}><input className="btn mono" style={{ textAlign: 'left', flex: 1, minWidth: 0 }} required minLength={8} value={f.password} onChange={set('password')} />
+              <button type="button" className="btn" onClick={() => setF({ ...f, password: makePassword() })} title="New password">{Icon.retry()}</button></span>
+          </label>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" className="btn" onClick={() => setF(null)} disabled={!!busy}>Cancel</button>
+            <button className="btn btn-pri" disabled={!!busy}>{busy === 'create' ? <><span className="spinner" /> Creating…</> : 'Create login'}</button>
+          </div>
+        </form>
+      )}
+
+      {made && (
+        <div style={{ border: '1px solid rgba(76,183,130,0.35)', background: 'rgba(76,183,130,0.06)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span style={{ fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center' }}>{Icon.check()} Send this to {made.full_name}</span>
+          <pre className="mono" style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.6 }}>{msgFor(made)}</pre>
+          <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-pri" onClick={() => copy(msgFor(made))}>Copy message</button>
+            <a className="btn" href={'https://wa.me/?text=' + encodeURIComponent(msgFor(made))} target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
+            <button className="btn" onClick={() => setMade(null)}>Done</button>
+          </span>
+          <span className="sub">The password is shown only now. If it's lost, use Reset password.</span>
+        </div>
+      )}
+
+      <div className="tblwrap">
+        <table className="tbl" style={{ minWidth: 720 }}>
+          <thead><tr><th>Name</th><th>Email</th><th>Access</th><th>Last sign-in</th><th>Status</th><th className="r">Actions</th></tr></thead>
+          <tbody>{profiles.map((p) => {
+            const u = emails.data?.[p.user_id];
+            return (
+              <tr key={p.user_id}>
+                <td style={{ fontWeight: 500 }}>{p.full_name || '—'}</td>
+                <td className="t2 mono" style={{ fontSize: 12 }}>{u?.email || '—'}</td>
+                <td className="t2">{p.role === 'admin' ? 'Admin · all brands' : brandName(p.brand_id)}</td>
+                <td className="t2 nowrap">{u?.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : <span className="muted">never</span>}</td>
+                <td>{p.active ? <span className="pos">Active</span> : <span className="muted">Disabled</span>}</td>
+                <td className="r nowrap">
+                  {busy === p.user_id ? <span className="spinner" /> : (
+                    <>
+                      <a href="#" onClick={(e) => { e.preventDefault(); resetPw(p); }} style={{ fontSize: 12 }}>Reset password</a>
+                      <span className="muted"> · </span>
+                      <a href="#" onClick={(e) => { e.preventDefault(); toggle(p); }} style={{ fontSize: 12, color: p.active ? 'var(--orange)' : undefined }}>{p.active ? 'Disable' : 'Enable'}</a>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
       </div>
     </section>
   );
