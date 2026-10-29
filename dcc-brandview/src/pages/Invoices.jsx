@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { rpc, logActivity } from '../supabase.js';
+import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, inWords, fmtD, fmtDY, cleanItem, cleanParty } from '../lib/format.js';
 import { downloadXlsx } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Skel, Icon } from '../components/ui.jsx';
@@ -107,6 +107,7 @@ function Detail({ inv, brand, brandName, notify }) {
         <div className="mini"><span className="sub">GST</span><span style={{ fontWeight: 600 }}>{rs(inv.gst, 2)}</span></div>
         <div className="mini hl"><span className="sub">Invoice total</span><span style={{ fontWeight: 600 }}>{rs(inv.total, 2)}</span></div>
       </div>
+      <Receiving inv={inv} />
       {error ? <span className="lerr">{Icon.alert(14)}{error}</span> : loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{[0, 1, 2, 3, 4].map((i) => <Skel key={i} h={14} w={`${95 - i * 8}%`} />)}</div>
       ) : (
@@ -130,5 +131,43 @@ function Detail({ inv, brand, brandName, notify }) {
       <p className="sub" style={{ margin: 0, borderTop: '1px solid var(--line-2)', paddingTop: 12 }}>{inWords(inv.total)}</p>
       <span className="sub" style={{ marginTop: -8 }}>{brandName}</span>
     </aside>
+  );
+}
+
+const driveId = (u) => (u.match(/[?&]id=([\w-]{10,})/) || u.match(/\/d\/([\w-]{10,})/) || [])[1];
+
+function Receiving({ inv }) {
+  const { data, loading } = useLoad(async () => {
+    const { data: d, error } = await supabase.from('invoice_documents').select('file_url, received_on').eq('document_no', inv.document_no).maybeSingle();
+    return error ? null : d;
+  }, [inv.document_no]);
+  if (inv.is_return) return null;
+  if (loading) return <Skel h={44} />;
+  if (!data) {
+    const subj = encodeURIComponent(`Receiving copy for ${inv.document_no}`);
+    return (
+      <div className="mini" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <span className="sub">Receiving copy not uploaded yet</span>
+        <a href={`mailto:info@dccorp.in?subject=${subj}`} style={{ fontSize: 12 }}>Request it</a>
+      </div>
+    );
+  }
+  const id = driveId(data.file_url);
+  const view = id ? `https://drive.google.com/file/d/${id}/view` : data.file_url;
+  const dl = id ? `https://drive.google.com/uc?export=download&id=${id}` : data.file_url;
+  return (
+    <div className="mini hl" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ color: 'var(--accent-soft)' }}>{Icon.doc(18)}</span>
+        <span style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: 600 }}>Receiving copy (stamped)</span>
+          <span className="sub">{data.received_on ? 'Received ' + fmtDY(data.received_on) : 'Signed & stamped by outlet'}</span>
+        </span>
+      </span>
+      <span style={{ display: 'flex', gap: 8 }}>
+        <a className="btn" href={view} target="_blank" rel="noopener noreferrer" onClick={() => logActivity('receiving_view', { doc: inv.document_no })}>{Icon.eye(14)} View</a>
+        <a className="btn btn-pri" href={dl} target="_blank" rel="noopener noreferrer" onClick={() => logActivity('receiving_download', { doc: inv.document_no })}>{Icon.download(14)} Download</a>
+      </span>
+    </div>
   );
 }

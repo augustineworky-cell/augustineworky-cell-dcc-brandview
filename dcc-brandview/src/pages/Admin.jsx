@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, fmtD } from '../lib/format.js';
 import { parseTallyFile, summarise } from '../lib/tally.js';
+import { downloadSalesTemplate, downloadReceivingTemplate, parseReceivingFile } from '../lib/templates.js';
 import { useLoad, LoadingCard, ErrorState, Icon } from '../components/ui.jsx';
 import { PageHead } from '../components/Parts.jsx';
 
@@ -99,6 +100,9 @@ export default function Admin({ ctx }) {
             <span className="sub">Okhla and Gurgaon "New Sales Report" .xlsx · or click to browse</span>
             <input ref={input} type="file" accept=".xlsx,.xls,.csv" multiple style={{ display: 'none' }} onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
           </label>
+          <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => downloadSalesTemplate(meta.data ? [...new Set(meta.data.groups.map((g) => g.item_group))].sort() : [])}>
+            {Icon.download()} Download Excel format
+          </button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, fontSize: 13 }} className="t2">
             {['Header and Total rows removed', 'DCC internal transfers removed', 'Duplicate invoice lines skipped', 'Each line tagged to its brand'].map((t) => (
               <span key={t} style={{ display: 'flex', gap: 9, alignItems: 'center' }}>{Icon.check()}{t}</span>
@@ -166,6 +170,8 @@ export default function Admin({ ctx }) {
         </div>
       </section>
 
+      <ReceivingCard ctx={ctx} />
+
       {meta.error ? <div className="card"><ErrorState message={meta.error} onRetry={meta.reload} /></div> : !meta.data ? <LoadingCard rows={8} /> : (
         <>
           <section className="card">
@@ -230,5 +236,108 @@ export default function Admin({ ctx }) {
         </>
       )}
     </main>
+  );
+}
+
+/* ---------- Receiving copies (stamped invoice PDFs from the FMS) ---------- */
+function ReceivingCard({ ctx }) {
+  const [parsed, setParsed] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [done, setDone] = useState(null);
+  const [over, setOver] = useState(false);
+
+  const info = useLoad(async () => {
+    const { count, error } = await supabase.from('invoice_documents').select('document_no', { count: 'exact', head: true });
+    if (error) return { missing: true, message: error.message };
+    const last = await supabase.from('invoice_documents').select('updated_at').order('updated_at', { ascending: false }).limit(1);
+    return { count, last: last.data?.[0]?.updated_at };
+  }, [done]);
+
+  async function onFiles(list) {
+    const files = [...list];
+    if (!files.length) return;
+    setDone(null); setBusy('Reading ' + files.map((f) => f.name).join(', ') + '…');
+    try {
+      const all = new Map(); const stats = [];
+      for (const f of files) {
+        const { rows, stats: st } = await parseReceivingFile(f);
+        rows.forEach((r) => all.set(r.document_no, r));
+        stats.push({ ...st, links: rows.length });
+      }
+      const rows = [...all.values()];
+      setParsed({ rows, stats, okhla: rows.filter((r) => r.location === 'Okhla').length, gurgaon: rows.filter((r) => r.location === 'Gurgaon').length });
+    } catch (e) { ctx.notify(e.message, true); setParsed(null); }
+    finally { setBusy(''); }
+  }
+
+  async function save() {
+    setBusy('Saving…'); setProgress(0);
+    try {
+      const rows = parsed.rows;
+      for (let i = 0; i < rows.length; i += 1000) {
+        const { error } = await supabase.from('invoice_documents').upsert(rows.slice(i, i + 1000), { onConflict: 'document_no' });
+        if (error) throw new Error(error.message);
+        setProgress(Math.round(Math.min(1, (i + 1000) / rows.length) * 100));
+      }
+      logActivity('receiving_upload', { links: rows.length });
+      ctx.notify(`Saved ${inr(rows.length)} receiving copies`);
+      setDone({ saved: rows.length }); setParsed(null);
+    } catch (e) { ctx.notify('Save failed: ' + e.message, true); }
+    finally { setBusy(''); }
+  }
+
+  return (
+    <section className="grid">
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="card-h" style={{ marginBottom: 0 }}><h2>Receiving copies</h2>
+          {info.data && !info.data.missing && <span className="pill"><span className="dot" style={{ background: '#4cb782' }} />{inr(info.data.count)} invoices</span>}
+        </div>
+        <label className={'drop' + (over ? ' over' : '')}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files); }}>
+          <span className="upic" style={{ color: 'var(--accent-soft)' }}>{busy ? <span className="spinner" /> : Icon.upload()}</span>
+          <span style={{ fontWeight: 600 }}>{busy || 'Drop FMS Order to Despatch files'}</span>
+          <span className="sub">Okhla + Gurgaon FMS (.xlsx or .csv of the main tab) · or click to browse</span>
+          <input type="file" accept=".xlsx,.xls,.csv" multiple style={{ display: 'none' }} onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
+        </label>
+        <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={downloadReceivingTemplate}>{Icon.download()} Download Excel format</button>
+        <p className="sub" style={{ lineHeight: 1.6, margin: 0 }}>
+          Reads <b>Invoice Number</b> and <b>Photograph of the receiving invoice copy</b>. Brands then get a “Receiving copy” button on each invoice. Drive files must be shared “Anyone with the link”.
+        </p>
+      </div>
+      <div className="card span2" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {info.data?.missing && (
+          <div className="state" style={{ padding: 24 }}><h3>Setup needed</h3><p>The <span className="mono">invoice_documents</span> table is not in Supabase yet. Run the receiving-copies SQL once, then refresh.</p></div>
+        )}
+        {!info.data?.missing && !parsed && (
+          <div className="state" style={{ padding: 24 }}>
+            <h3>{done ? `Saved ${inr(done.saved)} receiving copies` : 'Preview appears here'}</h3>
+            <p>{info.data?.last ? 'Last updated ' + new Date(info.data.last).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + '. ' : ''}Upload the FMS again any time – new invoices are added and changed links replaced.</p>
+          </div>
+        )}
+        {parsed && (
+          <>
+            <div className="card-h" style={{ marginBottom: 0 }}><h2>Preview</h2><span className="pill"><span className="dot live" style={{ background: '#9ba3f5', color: '#9ba3f5' }} />Ready to save</span></div>
+            {busy === 'Saving…' && <div className="bar" style={{ height: 3 }}><div style={{ width: progress + '%', height: 3, animation: 'none', transition: 'width .3s' }} /></div>}
+            <div className="stats">
+              <div className="stat"><span className="sub">Invoices with PDF</span><b>{inr(parsed.rows.length)}</b></div>
+              <div className="stat"><span className="sub">Okhla · Gurgaon</span><b>{inr(parsed.okhla)} · {inr(parsed.gurgaon)}</b></div>
+              <div className="stat"><span className="sub">No PDF yet</span><b>{inr(parsed.stats.reduce((a, x) => a + x.noLink, 0))}</b></div>
+            </div>
+            <div className="tblwrap">
+              <table className="tbl" style={{ minWidth: 420 }}>
+                <thead><tr><th>File</th><th className="r">Invoices</th><th className="r">With PDF</th><th className="r">No PDF</th></tr></thead>
+                <tbody>{parsed.stats.map((f) => <tr key={f.file}><td className="mono" style={{ fontSize: 12 }}>{f.file}</td><td className="r">{inr(f.read)}</td><td className="r">{inr(f.links)}</td><td className="r t2">{inr(f.noLink + f.badLink)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => setParsed(null)} disabled={!!busy}>Cancel</button>
+              <button className="btn btn-pri" onClick={save} disabled={!!busy || !parsed.rows.length}>{busy === 'Saving…' ? <><span className="spinner" /> {progress}%</> : 'Save receiving copies'}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
