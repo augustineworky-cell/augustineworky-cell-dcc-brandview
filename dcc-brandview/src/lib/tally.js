@@ -1,6 +1,15 @@
 import * as XLSX from 'xlsx';
 import { iso } from './format.js';
 
+/** Column order of the MASTER SALES REPORT sheet (Tally "New Sales Report"). */
+export const MASTER_COLS = ['Trans Type', 'Location Name', 'Location State', 'Dispatch Location Tin No', 'Invoice Type', 'Document No', 'Document Date',
+  'Vehicle No', 'Additional Amount', 'Customer Code', 'Buyer Address', 'Customer Address', 'Party Name', 'Customer Group Desc', 'Customer State Desc',
+  'Tin No', 'Item Group Desc', 'Item Code', 'Item Name', 'Quantity', 'UOM', 'Rate', 'Discount %', 'Discount Amount', 'Amount Less Discount', 'Amount',
+  'Cst %', 'Cst', 'Vat %', 'Vat', 'GST %', 'GST', 'Sales Amount', 'Total Tax Amount', 'Total Amount', 'Sales Account', 'Po.No.', 'Way Bill No',
+  'Transporter Name', 'Shipment No', 'MRP'];
+const ALIAS = { 'GR No': 'Po.No.' };
+const NUMERIC = new Set(['Quantity', 'Rate', 'Discount %']);
+
 const NEED = ['Document No', 'Document Date', 'Party Name', 'Item Group Desc', 'Item Code', 'Quantity', 'Total Amount'];
 
 const num = (v) => {
@@ -92,6 +101,19 @@ export async function parseTallyFile(file) {
       gst: col('GST') >= 0 ? Math.round(num(r[col('GST')]) * 100) / 100 : 0,
       total_amount: Math.round(num(r[col('Total Amount')]) * 100) / 100
     };
+    // every column of the sheet, so brands can download the full master-format report
+    const raw = {};
+    head.forEach((h, i) => {
+      if (!h || /^qty helper$/i.test(h)) return;
+      const k = ALIAS[h] || h;
+      let v = r[i];
+      if (v === '' || v === null || v === undefined) return;
+      if (k === 'Document Date') v = date;
+      else if (NUMERIC.has(k)) v = num(v);
+      else if (typeof v === 'string') { v = txt(v); if (!v) return; }
+      raw[k] = v;
+    });
+    row.raw = raw;
     const key = [row.location, row.document_no, row.item_code, row.qty, row.rate].join('|');
     if (seen.has(key)) { stats.dupes++; continue; }
     seen.add(key);
@@ -126,7 +148,7 @@ export function downloadXlsx(filename, sheetName, columns, rows) {
   XLSX.writeFile(wb, filename);
 }
 
-const LINE_COLS = 'document_date, document_no, trans_type, is_return, location, party_name, item_code, item_name, qty, uom, rate, amount, gst, total_amount, brand_id';
+const LINE_COLS = 'document_date, document_no, trans_type, is_return, location, party_name, customer_code, customer_group, item_group, item_code, item_name, qty, uom, rate, discount_pct, amount, gst_pct, gst, total_amount, brand_id, raw';
 
 /** Reads every sales line for the filters, 1000 rows at a time. RLS limits brand users to their own brand. */
 export async function fetchAllLines(supabase, { from, to, loc, brand }) {
@@ -141,4 +163,74 @@ export async function fetchAllLines(supabase, { from, to, loc, brand }) {
     all.push(...data);
     if (data.length < 1000) return all;
   }
+}
+
+/** Receiving-copy PDF links for these invoice numbers (RLS: brands only get their own single-brand bills). */
+export async function fetchDocLinks(supabase, docs) {
+  const out = {};
+  const list = [...new Set(docs)];
+  for (let i = 0; i < list.length; i += 100) {
+    const { data, error } = await supabase.from('invoice_documents').select('document_no, file_url').in('document_no', list.slice(i, i + 100));
+    if (error) return out;
+    for (const d of data) out[d.document_no] = d.file_url;
+  }
+  return out;
+}
+
+const FALLBACK = {
+  'Trans Type': 'trans_type', 'Location Name': 'location', 'Document No': 'document_no', 'Document Date': 'document_date',
+  'Customer Code': 'customer_code', 'Party Name': 'party_name', 'Customer Group Desc': 'customer_group', 'Item Group Desc': 'item_group',
+  'Item Code': 'item_code', 'Item Name': 'item_name', 'Quantity': 'qty', 'UOM': 'uom', 'Rate': 'rate', 'Discount %': 'discount_pct',
+  'Amount': 'amount', 'GST %': 'gst_pct', 'GST': 'gst', 'Total Amount': 'total_amount'
+};
+const NUM_OUT = new Set(['Quantity', 'Rate', 'Discount %', 'Discount Amount', 'Amount Less Discount', 'Amount', 'Cst %', 'Cst', 'Vat %', 'Vat',
+  'GST %', 'GST', 'Sales Amount', 'Total Tax Amount', 'Total Amount', 'MRP', 'Additional Amount']);
+
+/** Full master-format workbook: every Tally column + receiving-copy link, plus a simple sheet. */
+export function downloadMasterXlsx(filename, lines, links, brandNames) {
+  const cols = [...MASTER_COLS, 'Receiving copy (PDF)'];
+  const toDateObj = (s) => { if (s instanceof Date) s = iso(s); const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000 : s; };
+  const data = [cols];
+  for (const l of lines) {
+    const raw = l.raw || {};
+    data.push(cols.map((c) => {
+      if (c === 'Receiving copy (PDF)') return links[l.document_no] || '';
+      let v = raw[c];
+      if ((v === undefined || v === null || v === '') && FALLBACK[c]) v = l[FALLBACK[c]];
+      if (c === 'Document Date') return toDateObj(l.document_date);
+      if (NUM_OUT.has(c) && v !== undefined && v !== null && v !== '' && !isNaN(Number(v))) return Number(v);
+      return v ?? '';
+    }));
+  }
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const li = cols.length - 1, di = cols.indexOf('Document Date');
+  for (let r = 1; r < data.length; r++) {
+    const d = ws[XLSX.utils.encode_cell({ r, c: di })]; if (d && d.t === 'n') d.z = 'dd-mm-yyyy';
+    const u = data[r][li]; if (u) ws[XLSX.utils.encode_cell({ r, c: li })].l = { Target: u };
+  }
+  ws['!cols'] = cols.map((c) => ({ wch: /Address/.test(c) ? 45 : /Party Name|Item Name|Receiving/.test(c) ? 38 : Math.max(10, c.length + 2) }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: li } }) };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  const simpleCols = [['Date', 'document_date'], ['Invoice', 'document_no'], ['Type', 'type'], ['Warehouse', 'location'], ['Brand', 'brand'], ['Outlet', 'party_name'],
+    ['Item code', 'item_code'], ['Item', 'item_name'], ['Qty', 'qty'], ['UOM', 'uom'], ['Rate', 'rate'], ['Taxable', 'amount'], ['GST', 'gst'], ['Total', 'total_amount'], ['Receiving copy (PDF)', 'pdf']];
+  const sdata = [simpleCols.map((c) => c[0]), ...lines.map((l) => simpleCols.map(([, k]) => {
+    if (k === 'type') return l.is_return ? 'Return' : 'Sale';
+    if (k === 'brand') return brandNames[l.brand_id] || '';
+    if (k === 'pdf') return links[l.document_no] || '';
+    if (k === 'document_date') return toDateObj(l.document_date);
+    if (['qty', 'rate', 'amount', 'gst', 'total_amount'].includes(k)) return Number(l[k]);
+    return l[k] ?? '';
+  }))];
+  const ws2 = XLSX.utils.aoa_to_sheet(sdata);
+  for (let r = 1; r < sdata.length; r++) {
+    const d = ws2[XLSX.utils.encode_cell({ r, c: 0 })]; if (d && d.t === 'n') d.z = 'dd-mm-yyyy';
+    const u = sdata[r][14]; if (u) ws2[XLSX.utils.encode_cell({ r, c: 14 })].l = { Target: u };
+  }
+  ws2['!cols'] = simpleCols.map((c) => ({ wch: /Outlet|Item$|Receiving/.test(c[0]) ? 38 : 12 }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Master format');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Simple view');
+  XLSX.writeFile(wb, filename);
 }

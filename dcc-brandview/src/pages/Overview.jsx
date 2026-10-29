@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, inWords, prevRange, presetRange, pctChange, daysBetween, cleanItem, cleanParty, fmtD } from '../lib/format.js';
-import { downloadXlsx, fetchAllLines } from '../lib/tally.js';
+import { fetchAllLines, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
 import { useLoad, Skel, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
 import { PageHead, DailyChart, Change, scopeLabel } from '../components/Parts.jsx';
 
@@ -26,14 +26,9 @@ export default function Overview({ ctx }) {
     try {
       const lines = await fetchAllLines(supabase, { from: ctx.from, to: ctx.to, loc: ctx.loc, brand: ctx.brand });
       const brandNames = Object.fromEntries(ctx.brands.map((b) => [b.id, b.name]));
-      const rows = lines.map((l) => ({
-        ...l, type: l.is_return ? 'Return' : 'Sale', brand: brandNames[l.brand_id] || '',
-        qty: Number(l.qty), rate: Number(l.rate), amount: Number(l.amount), gst: Number(l.gst), total_amount: Number(l.total_amount)
-      }));
-      downloadXlsx(`${ctx.brandName} sales lines ${ctx.from} to ${ctx.to}.xlsx`, 'Sales lines',
-        [['Date', 'document_date'], ['Invoice', 'document_no'], ['Type', 'type'], ['Warehouse', 'location'], ['Brand', 'brand'], ['Outlet', 'party_name', 'wide'],
-          ['Item code', 'item_code'], ['Item', 'item_name', 'wide'], ['Qty', 'qty'], ['UOM', 'uom'], ['Rate', 'rate'], ['Taxable', 'amount'], ['GST', 'gst'], ['Total', 'total_amount']],
-        rows);
+      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+      downloadMasterXlsx(`${ctx.brandName} sales ${ctx.from} to ${ctx.to}.xlsx`, lines, links, brandNames);
+      const rows = lines;
       logActivity('export', { page: 'all-lines', from: ctx.from, to: ctx.to });
       ctx.notify(`Downloaded ${rows.length} lines`);
     } catch (e) {

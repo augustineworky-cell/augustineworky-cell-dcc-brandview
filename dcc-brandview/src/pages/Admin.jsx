@@ -125,6 +125,7 @@ export default function Admin({ ctx }) {
                 <div className="stat"><span className="sub">Already there (skipped)</span><b>{inr(result.duplicates)}</b></div>
                 <div className="stat"><span className="sub">Dates</span><b>{result.from ? fmtD(result.from) + ' – ' + fmtD(result.to) : '—'}</b></div>
                 <div className="stat"><span className="sub">No brand (skipped)</span><b>{inr(result.unmapped)}</b></div>
+                {result.filled > 0 && <div className="stat"><span className="sub">Old lines given full columns</span><b>{inr(result.filled)}</b></div>}
               </div>
             </>
           )}
