@@ -15,8 +15,8 @@ const pageFromHash = () => (window.location.hash.replace(/^#\/?/, '') || 'overvi
 
 function Splash({ text }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-      <div className="mark" style={{ animation: 'none' }}><DccMark size={36} dark /></div>
+    <div className="app" data-theme="light" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: 'var(--bg)' }}>
+      <div className="mark" style={{ animation: 'none', background: 'transparent', boxShadow: 'none', border: 0 }}><DccMark size={44} /></div>
       <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" />{text}</span>
     </div>
   );
@@ -24,7 +24,7 @@ function Splash({ text }) {
 
 function Notice({ title, text, onSignOut }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+    <div className="app" data-theme="light" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'var(--bg)' }}>
       <div className="card state" style={{ maxWidth: 460 }}>
         <div className="ic err">{Icon.alert()}</div>
         <h3>{title}</h3>
@@ -45,17 +45,16 @@ function SetPassword({ done }) {
     if (error) setMsg(error.message); else done();
   }
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="ring" style={{ maxWidth: 420 }}>
-        <form className="lform" onSubmit={save} style={{ paddingBottom: 30 }}>
-          <div className="lhead"><div className="mark"><DccMark size={36} dark /></div><h2>Set a new password</h2></div>
-          <div className="fld"><label htmlFor="np">New password</label>
-            <div className="field"><span style={{ color: '#6f747d', display: 'flex' }}>{Icon.lock()}</span>
-              <input id="np" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></div></div>
-          {msg && <div className="lerr">{Icon.alert(14)}{msg}</div>}
-          <button className="lbtn" type="submit">Save password {Icon.arrow()}</button>
-        </form>
-      </div>
+    <div className="vl-solo">
+      <form className="vl-form" onSubmit={save}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}><DccMark size={40} /></div>
+        <h2>Set a new password</h2>
+        <label htmlFor="np">New password
+          <span className="vl-field">{Icon.lock()}<input id="np" type="password" autoComplete="new-password" required placeholder="At least 8 characters" value={pw} onChange={(e) => setPw(e.target.value)} /></span>
+        </label>
+        {msg && <div className="vl-msg" role="alert">{Icon.alert(14)}{msg}</div>}
+        <button className="vl-btn" type="submit">Save password {Icon.arrow()}</button>
+      </form>
     </div>
   );
 }
@@ -69,12 +68,7 @@ export default function App() {
   const [page, setPage] = useState(pageFromHash());
   const [toast, setToast] = useState(null);
   const [invSearch, setInvSearch] = useState('');
-  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('bv-theme') || 'light'; } catch { return 'light'; } });
-  const toggleTheme = () => setTheme((t) => { const n = t === 'light' ? 'dark' : 'light'; try { localStorage.setItem('bv-theme', n); } catch { /* private mode */ } return n; });
-  useEffect(() => {
-    document.body.style.background = profile && theme === 'light' ? '#f6f7f9' : '';
-    return () => { document.body.style.background = ''; };
-  }, [theme, profile]);
+  const theme = 'light';   // BrandView is white-only (dark theme removed Nov 2026)
   const [f, setF] = useState(() => { const [from, to] = presetRange('month'); return { preset: 'month', from, to, loc: null }; });
 
   const notify = useCallback((msg, err = false) => {
@@ -135,7 +129,7 @@ export default function App() {
 
   return (
     <div className="app" data-theme={theme}>
-      <TopBar page={view} go={go} profile={profile} brands={brands} brandId={brandId} setBrandId={setBrandId} onSignOut={signOut} theme={theme} toggleTheme={toggleTheme} />
+      <TopBar page={view} go={go} profile={profile} brands={brands} brandId={brandId} setBrandId={setBrandId} onSignOut={signOut} />
       {view === 'overview' && <Overview ctx={ctx} />}
       {view === 'products' && <Products ctx={ctx} />}
       {view === 'outlets' && <Outlets ctx={ctx} />}

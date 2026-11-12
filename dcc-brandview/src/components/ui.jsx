@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-export function DccMark({ size = 28, dark = false }) {
-  const tile = dark ? '#15171b' : 'var(--mark-tile, #f7f8f8)';
-  const ink = dark ? '#f7f8f8' : 'var(--mark-ink, #111215)';
+/* Colour DCC mark (Nov 2026): four coloured tiles - warehouse, store, truck, forklift - with white line icons. */
+export function DccMark({ size = 28 }) {
+  const C = ['#2782c0', '#e5864a', '#4cb782', '#d63a7a'];
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" role="img" aria-label="DCC">
-      <rect width="22" height="22" rx="4" fill={tile} />
-      <rect x="26" width="22" height="22" rx="4" fill={tile} />
-      <rect y="26" width="22" height="22" rx="4" fill={tile} />
-      <rect x="26" y="26" width="22" height="22" rx="4" fill={tile} />
-      <g fill="none" stroke={ink} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="22" height="22" rx="5" fill={C[0]} />
+      <rect x="26" width="22" height="22" rx="5" fill={C[1]} />
+      <rect y="26" width="22" height="22" rx="5" fill={C[2]} />
+      <rect x="26" y="26" width="22" height="22" rx="5" fill={C[3]} />
+      <g fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 10.5L11 5l7 5.5V18H4z" /><path d="M11 9.5v6.5M8.2 11.1l5.6 3.3M13.8 11.1l-5.6 3.3" />
         <path d="M30 10.5L37 5l7 5.5V18H30z" /><path d="M33.5 18v-4.5h3.5V18M37 18v-3h3.5v3" />
         <path d="M3.5 32.5h10v8h-10zM13.5 35.5h4l2.5 3V40.5h-6.5z" /><circle cx="7" cy="42.5" r="1.7" /><circle cx="16.5" cy="42.5" r="1.7" />
