@@ -69,7 +69,7 @@ export default function App() {
   const [page, setPage] = useState(pageFromHash());
   const [toast, setToast] = useState(null);
   const [invSearch, setInvSearch] = useState('');
-  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('bv-theme') || 'dark'; } catch { return 'dark'; } });
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('bv-theme') || 'light'; } catch { return 'light'; } });
   const toggleTheme = () => setTheme((t) => { const n = t === 'light' ? 'dark' : 'light'; try { localStorage.setItem('bv-theme', n); } catch { /* private mode */ } return n; });
   useEffect(() => {
     document.body.style.background = profile && theme === 'light' ? '#f6f7f9' : '';
