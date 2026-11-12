@@ -60,21 +60,19 @@ export default function Login() {
   const ok = err.startsWith('ok:');
   return (
     <div className="vlogin">
-      <section className="vl-stage" aria-label={film.brand}>
+      <div className="vl-bg" aria-hidden="true">
         <img className={'vl-poster' + (playing ? ' gone' : '')} src={film.poster} alt="" />
-        <video key={film.key} ref={vid} src={film.src} poster={film.poster} autoPlay muted playsInline preload="auto" aria-hidden="true"
+        <video key={film.key} ref={vid} src={film.src} poster={film.poster} autoPlay muted playsInline preload="auto"
           onPlaying={() => setPlaying(true)} />
-        <div className="vl-shade" aria-hidden="true" />
+        <div className="vl-shade" />
+      </div>
+
+      <header className="vl-top">
+        <div className="vl-logo"><DccMark size={34} /><span className="w">DCC</span><span className="p">BrandView</span></div>
         <div className="vl-tag"><i style={{ background: film.dot }} />{film.brand} · Okhla &amp; Gurgaon</div>
-        <div className="vl-copy">
-          <h1 key={film.key}>{film.line}</h1>
-          <p>Secondary sales, outlets, invoices and returns for your brand, updated daily from DCC billing.</p>
-        </div>
-      </section>
+      </header>
 
-      <section className="vl-side">
-        <div className="vl-logo"><DccMark size={34} dark /><span className="w">DCC</span><span className="p">BrandView</span></div>
-
+      <main className="vl-center">
         <div key={shake} className={'vl-formwrap' + (shake ? ' shake' : '')}>
           <form className="vl-form" onSubmit={submit}>
             <h2>{mode === 'reset' ? 'Reset password' : 'Welcome back'}</h2>
@@ -107,9 +105,12 @@ export default function Login() {
             <div className="vl-note">{Icon.shield()} You only ever see your own brand's data</div>
           </form>
         </div>
+      </main>
 
-        <div className="vl-foot"><span>DCC Supply Chain &amp; Distribution LLP</span><span>New brand partner? <a href="mailto:info@dccorp.in">Request access</a></span></div>
-      </section>
+      <footer className="vl-foot">
+        <h1 key={film.key}>{film.line}</h1>
+        <span>DCC Supply Chain &amp; Distribution LLP · New brand partner? <a href="mailto:info@dccorp.in">Request access</a></span>
+      </footer>
     </div>
   );
 }
