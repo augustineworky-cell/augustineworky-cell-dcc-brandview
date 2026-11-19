@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect, useCallback } from 'react';
 import { Lockup, Icon } from './ui.jsx';
 import { initials } from '../lib/format.js';
 
@@ -14,6 +14,23 @@ export const PAGES = [
 
 export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignOut }) {
   const [open, setOpen] = useState(false);
+  const navRef = useRef(null);
+  const [pill, setPill] = useState(null);
+  // sliding pill: follows the hovered tab, rests on the active tab
+  const moveTo = useCallback((el) => {
+    if (!el) return;
+    setPill({ left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight });
+  }, []);
+  const rest = useCallback(() => {
+    const el = navRef.current && navRef.current.querySelector('.tlink.on');
+    if (el) moveTo(el); else setPill(null);
+  }, [moveTo]);
+  useLayoutEffect(() => {
+    rest();
+    const t = setTimeout(rest, 250); // after fonts settle
+    window.addEventListener('resize', rest);
+    return () => { clearTimeout(t); window.removeEventListener('resize', rest); };
+  }, [page, rest]);
   const isAdmin = profile.role === 'admin';
   const current = brands.find((b) => b.id === brandId);
   const chipBrand = isAdmin ? current : brands[0];
@@ -34,11 +51,12 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
           <span>{chipBrand ? chipBrand.name : 'My brand'}</span>
         )}
       </label>
-      <div className="navlinks">
+      <div className="navlinks" ref={navRef} onMouseLeave={rest}>
+        {pill && <span className="nav-pill" aria-hidden="true" style={pill} />}
         {PAGES.map((p) => (
-          <button key={p.id} className={'tlink' + (page === p.id ? ' on' : '')} aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.to || p.id)}>{p.label}</button>
+          <button key={p.id} className={'tlink' + (page === p.id ? ' on' : '')} aria-current={page === p.id ? 'page' : undefined} onMouseEnter={(e) => moveTo(e.currentTarget)} onFocus={(e) => moveTo(e.currentTarget)} onBlur={rest} onClick={() => go(p.to || p.id)}>{p.label}</button>
         ))}
-        {isAdmin && <button className={'tlink' + (page === 'admin' ? ' on' : '')} onClick={() => go('admin')}>Admin</button>}
+        {isAdmin && <button className={'tlink' + (page === 'admin' ? ' on' : '')} onMouseEnter={(e) => moveTo(e.currentTarget)} onFocus={(e) => moveTo(e.currentTarget)} onBlur={rest} onClick={() => go('admin')}>Admin</button>}
       </div>
       <div className="tright">
         <div className="menu">

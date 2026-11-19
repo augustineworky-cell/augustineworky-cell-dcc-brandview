@@ -472,14 +472,6 @@ html { scroll-behavior: smooth; }
 .page { animation: pagein .45s var(--ease) both; }
 
 /* top menu: smooth pill, lift on hover, animated underline on the active page */
-.tlink { position: relative; transition: color 200ms var(--ease), background 200ms var(--ease), transform 200ms var(--ease), box-shadow 200ms var(--ease); }
-.tlink:hover { transform: translateY(-1px); }
-.tlink:active { transform: scale(.96); }
-.tlink.on::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 3px; height: 2px; border-radius: 2px; background: var(--accent); transform-origin: center; animation: underline .35s var(--ease) both; }
-.navlinks .tlink { animation: dropin .5s var(--ease) both; }
-.navlinks .tlink:nth-child(2) { animation-delay: .04s; } .navlinks .tlink:nth-child(3) { animation-delay: .08s; }
-.navlinks .tlink:nth-child(4) { animation-delay: .12s; } .navlinks .tlink:nth-child(5) { animation-delay: .16s; }
-.navlinks .tlink:nth-child(6) { animation-delay: .2s; } .navlinks .tlink:nth-child(7) { animation-delay: .24s; } .navlinks .tlink:nth-child(8) { animation-delay: .28s; }
 
 /* cards: lift + accent edge on hover */
 .card { transition: transform 250ms var(--ease), box-shadow 250ms var(--ease), border-color 250ms var(--ease), background 250ms var(--ease); }
@@ -539,27 +531,18 @@ html { scroll-behavior: smooth; }
 .tabbar button:active { transform: scale(.9); }
 .tabbar button.on { animation: popin .25s var(--ease) both; }
 
-/* ---------- sharp "tactical" tab motion (no colour/font/theme change) ---------- */
-@keyframes vclip { from { clip-path: inset(0 100% 0 0); opacity: 0; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
-@keyframes loadline { 0% { transform: translateX(-100%); opacity: 1; } 75% { opacity: 1; } 100% { transform: translateX(100%); opacity: 0; } }
-@keyframes tabflash { 0% { box-shadow: 0 0 0 0 rgba(94,106,210,0.7); } 100% { box-shadow: 0 0 0 14px rgba(94,106,210,0); } }
-@keyframes shineacross { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(320%) skewX(-20deg); } }
-.tlink { overflow: hidden; isolation: isolate; transition: transform 160ms cubic-bezier(.7,0,.2,1), color 160ms ease, background 200ms ease; }
-.tlink::before { content: ""; position: absolute; inset: 0 -14px; z-index: -1; background: linear-gradient(90deg, rgba(94,106,210,0.30), rgba(94,106,210,0.08)); transform: translateX(-115%) skewX(-18deg); transition: transform 380ms cubic-bezier(.7,0,.2,1); }
-.tlink:hover::before, .tlink.on::before { transform: translateX(0) skewX(-18deg); }
-.tlink:hover { transform: skewX(-8deg) translateY(-1px); color: var(--text); background: transparent; }
-.tlink:active { transform: skewX(-8deg) scale(.93); }
-.tlink::after, .tlink.on::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 4px; top: auto; height: 2px; border-radius: 0; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 380ms cubic-bezier(.7,0,.2,1); animation: none; }
-.tlink:not(:hover):not(.on)::after { transform-origin: right; }
-.tlink:hover::after, .tlink.on::after { transform: scaleX(1); }
-.tlink.on { background: transparent; animation: tabflash .6s ease-out; }
-.navlinks .tlink { animation: vclip .55s cubic-bezier(.7,0,.2,1) both; }
-.navlinks .tlink.on { animation: vclip .55s cubic-bezier(.7,0,.2,1) both, tabflash .8s ease-out .5s; }
 
-/* page-change scan line across the top */
-.page::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 60; pointer-events: none; background: linear-gradient(90deg, transparent 0%, var(--accent) 40%, var(--accent-soft) 60%, transparent 100%); animation: loadline .75s cubic-bezier(.7,0,.2,1) both; }
 
 /* primary buttons: shine wipe on hover */
 .btn-pri { position: relative; overflow: hidden; }
 .btn-pri::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 35%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.30), transparent); transform: translateX(-120%) skewX(-20deg); pointer-events: none; }
 .btn-pri:hover::after { animation: shineacross .7s cubic-bezier(.7,0,.2,1); }
+
+/* ---------- sliding nav pill (Resend-style) ---------- */
+.navlinks { position: relative; }
+.navlinks .nav-pill { position: absolute; z-index: 0; border-radius: 999px; pointer-events: none; background: var(--card-2); border: 1px solid rgba(255,255,255,0.10); box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.06); transition: left 380ms cubic-bezier(.32,.72,0,1), top 380ms cubic-bezier(.32,.72,0,1), width 380ms cubic-bezier(.32,.72,0,1), height 380ms cubic-bezier(.32,.72,0,1), opacity 200ms ease; animation: popin .35s var(--ease) both; }
+.app[data-theme="light"] .navlinks .nav-pill { border-color: rgba(15,18,30,0.10); box-shadow: 0 1px 2px rgba(15,18,30,0.06); }
+.navlinks .tlink { position: relative; z-index: 1; background: transparent !important; border-color: transparent !important; box-shadow: none !important; transition: color 220ms ease; animation: fadein .5s ease both; }
+.navlinks .tlink:hover, .navlinks .tlink.on { color: var(--text); }
+.navlinks .tlink:active { opacity: .8; }
+.menu-pop { animation: popin .22s cubic-bezier(.32,.72,0,1) both; }
