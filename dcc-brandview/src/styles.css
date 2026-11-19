@@ -628,3 +628,11 @@ button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
 .vlogin .vl-form button + .vl-sub::before, .vlogin .vl-form button + .vl-sub::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.22); }
 .vlogin .vl-note { font-size: 11.5px; color: rgba(255,255,255,.6); }
 @media (max-width: 520px) { .vlogin .vl-form { padding: 22px 18px 16px; } }
+/* autofill: keep the glass look (Chrome paints its own fill; delay it forever so the field stays see-through) */
+.vlogin .vl-field input:-webkit-autofill,
+.vlogin .vl-field input:-webkit-autofill:hover,
+.vlogin .vl-field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 40px transparent inset !important;
+  -webkit-text-fill-color: #fff !important; caret-color: #fff;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
