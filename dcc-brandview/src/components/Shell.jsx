@@ -1,6 +1,7 @@
 import { useState, useRef, useLayoutEffect, useCallback } from 'react';
 import { Lockup, Icon } from './ui.jsx';
 import { initials } from '../lib/format.js';
+import BrandLogo from './BrandLogo.jsx';
 
 export const PAGES = [
   { id: 'report', label: 'Sales report', icon: Icon.overview },
@@ -38,19 +39,14 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
     <nav className="topbar" aria-label="Main">
       <a href="#/overview" onClick={(e) => { e.preventDefault(); go('overview'); }}><Lockup /></a>
       <span className="slash" aria-hidden="true">/</span>
-      <label className="brandchip">
-        <span className="bdot" style={{ background: chipBrand ? chipBrand.color + '22' : 'var(--hover)', color: chipBrand ? chipBrand.color : 'var(--text-2)' }}>
-          {chipBrand ? initials(chipBrand.name) : 'ALL'}
-        </span>
-        {isAdmin ? (
-          <select aria-label="Brand" value={brandId || ''} onChange={(e) => setBrandId(e.target.value || null)}>
-            <option value="">All brands</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        ) : (
+      {isAdmin ? (
+        <BrandPicker brands={brands} brandId={brandId} setBrandId={setBrandId} current={current} />
+      ) : (
+        <div className="brandchip" style={{ paddingLeft: 6 }}>
+          <BrandLogo brand={chipBrand} size={26} />
           <span>{chipBrand ? chipBrand.name : 'My brand'}</span>
-        )}
-      </label>
+        </div>
+      )}
       <div className="navlinks" ref={navRef} onMouseLeave={rest}>
         {pill && <span className="nav-pill" aria-hidden="true" style={pill} />}
         {PAGES.map((p) => (
@@ -114,6 +110,43 @@ export function Filters({ f, setF, presetRange, showLoc = true }) {
         <span className="muted">–</span>
         <input type="date" aria-label="To date" value={f.to} min={f.from} onChange={(e) => e.target.value && setF({ ...f, preset: null, to: e.target.value })} />
       </div>
+    </div>
+  );
+}
+
+
+/** Admin brand switcher: custom dropdown so every brand shows its logo. */
+function BrandPicker({ brands, brandId, setBrandId, current }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  const pick = (id) => { setBrandId(id); setOpen(false); };
+  return (
+    <div className="brandpick" ref={ref}>
+      <button type="button" className="brandchip" aria-haspopup="listbox" aria-expanded={open} aria-label="Brand" onClick={() => setOpen(!open)} style={{ paddingLeft: 6 }}>
+        <BrandLogo brand={current} size={26} />
+        <span>{current ? current.name : 'All brands'}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transition: 'transform 250ms var(--ease)', transform: open ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="brandlist" role="listbox" aria-label="Brands">
+          <button type="button" role="option" aria-selected={!brandId} className={'bopt' + (!brandId ? ' on' : '')} onClick={() => pick(null)} style={{ animationDelay: '0s' }}>
+            <BrandLogo brand={null} size={28} /><span>All brands</span>
+          </button>
+          {brands.map((b, i) => (
+            <button type="button" role="option" aria-selected={brandId === b.id} key={b.id} className={'bopt' + (brandId === b.id ? ' on' : '')} onClick={() => pick(b.id)} style={{ animationDelay: (0.03 * (i + 1)) + 's' }}>
+              <BrandLogo brand={b} size={28} /><span>{b.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

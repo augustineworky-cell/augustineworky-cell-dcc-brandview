@@ -546,3 +546,12 @@ html { scroll-behavior: smooth; }
 .navlinks .tlink:hover, .navlinks .tlink.on { color: var(--text); }
 .navlinks .tlink:active { opacity: .8; }
 .menu-pop { animation: popin .22s cubic-bezier(.32,.72,0,1) both; }
+
+/* ---------- brand picker with logos ---------- */
+.brandpick { position: relative; }
+button.brandchip { cursor: pointer; font: inherit; }
+button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
+.brandlist { position: absolute; left: 0; top: 46px; z-index: 40; min-width: 250px; max-height: 70vh; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: var(--card-2); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 60px -16px rgba(0,0,0,0.55); transform-origin: top left; animation: popin .22s cubic-bezier(.32,.72,0,1) both; }
+.bopt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: transparent; color: var(--text-2); padding: 8px 10px; border-radius: 9px; font-size: 14px; font-weight: 500; animation: rise .35s var(--ease) both; transition: background 150ms var(--ease), color 150ms var(--ease), transform 150ms var(--ease); }
+.bopt:hover { background: var(--hover); color: var(--text); transform: translateX(3px); }
+.bopt.on { background: var(--card); color: var(--text); box-shadow: inset 3px 0 0 0 var(--accent); }
