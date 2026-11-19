@@ -6,6 +6,7 @@ import BrandLogo from './BrandLogo.jsx';
 export const PAGES = [
   { id: 'report', label: 'Sales report', icon: Icon.overview },
   { id: 'po', label: 'PO & Appointments', icon: Icon.doc },
+  { id: 'stock', label: 'Stock', icon: Icon.box },
   { id: 'overview', label: 'Overview', icon: Icon.overview },
   { id: 'products', label: 'Products', icon: Icon.box },
   { id: 'outlets', label: 'Outlets', icon: Icon.store },
