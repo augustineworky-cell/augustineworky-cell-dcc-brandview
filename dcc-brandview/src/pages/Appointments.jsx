@@ -11,23 +11,32 @@ import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../compone
 const COLS = 'brand_id, location, po_status, party_name, po_number, po_date, po_expiry, tentative_appt, appt_date, item_code, item_desc, po_qty, dispatched_qty, balance_qty, remark1, remark2, po_key';
 const dmy = (s) => { const d = String(s || '').slice(0, 10).split('-'); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : '—'; };
 
-async function fetchPo(brand) {
-  const all = [];
-  for (let start = 0; ; start += 1000) {
-    let q = supabase.from('po_lines').select(COLS);
+// Loads only what is on screen (status + warehouse filtered in the database) and pulls the pages in parallel.
+async function fetchPo(brand, status, loc) {
+  const page = (start, withCount) => {
+    let q = supabase.from('po_lines').select(COLS, withCount ? { count: 'exact' } : undefined);
     if (brand) q = q.eq('brand_id', brand);
-    const { data, error } = await q.order('po_expiry', { ascending: false }).order('po_key').order('item_code').range(start, start + 999);
-    if (error) throw new Error(error.message);
-    all.push(...data);
-    if (data.length < 1000) return all;
-  }
+    if (status) q = q.eq('po_status', status);
+    if (loc) q = q.eq('location', loc);
+    return q.order('po_expiry', { ascending: false }).order('po_key').order('item_code').range(start, start + 999);
+  };
+  const first = await page(0, true);
+  if (first.error) throw new Error(first.error.message);
+  const total = first.count || first.data.length;
+  if (total <= 1000) return first.data;
+  const starts = [];
+  for (let s = 1000; s < total; s += 1000) starts.push(s);
+  const rest = await Promise.all(starts.map((s) => page(s, false)));
+  const out = [...first.data];
+  for (const r of rest) { if (r.error) throw new Error(r.error.message); out.push(...r.data); }
+  return out;
 }
 
 export default function Appointments({ ctx }) {
   const [status, setStatus] = useState('open');
   const [loc, setLoc] = useState(null);
   const [q, setQ] = useState('');
-  const { data, error, loading, reload } = useLoad(() => fetchPo(ctx.brand), [ctx.brand]);
+  const { data, error, loading, reload } = useLoad(() => fetchPo(ctx.brand, status, loc), [ctx.brand, status, loc]);
 
   const names = useMemo(() => Object.fromEntries((ctx.brands || []).map((b) => [b.id, b.name])), [ctx.brands]);
   const brandName = (id) => names[id] || ctx.brandName;
@@ -53,7 +62,9 @@ export default function Appointments({ ctx }) {
 
   async function download() {
     try {
-      await downloadPoXlsx(`${ctx.brandName} PO appointments.xlsx`, data, brandName);
+      ctx.notify('Preparing the full PO Excel…');
+      const full = await fetchPo(ctx.brand, null, null);   // the Excel always has every tab
+      await downloadPoXlsx(`${ctx.brandName} PO appointments.xlsx`, full, brandName);
       logActivity('export', { page: 'po-appointments' });
       ctx.notify('PO Excel downloaded');
     } catch (e) { ctx.notify(e.message || 'Download failed', true); }
@@ -72,14 +83,14 @@ export default function Appointments({ ctx }) {
         <div className="seg" role="group" aria-label="Warehouse">
           {[[null, 'All'], ['Delhi', 'Delhi'], ['Gurgaon', 'Gurgaon']].map(([v, l]) => <button key={l} className={loc === v ? 'on' : ''} onClick={() => setLoc(v)}>{l}</button>)}
         </div>
-        <button className="btn btn-pri" disabled={!data || !data.length} onClick={download}>{Icon.download()} Download Excel</button>
+        <button className="btn btn-pri" onClick={download}>{Icon.download()} Download Excel</button>
       </div>
     </header>
   );
 
   if (loading && !data) return <main className="page">{head}<LoadingCard rows={8} /></main>;
   if (error) return <main className="page">{head}<div className="card"><ErrorState message={error} onRetry={reload} /></div></main>;
-  if (!data.length) return <main className="page">{head}<div className="card"><Empty title="No POs yet" text="PO data syncs from the appointment sheet every 30 minutes." /></div></main>;
+  if (!data.length) return <main className="page">{head}<div className="card"><Empty title="No POs here" text="Nothing for these filters. PO data syncs from the appointment sheet every 30 minutes." /></div></main>;
 
   const LIMIT = 60;
   return (
