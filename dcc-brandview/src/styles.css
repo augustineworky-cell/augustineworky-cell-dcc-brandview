@@ -592,3 +592,39 @@ button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
   .po-prog { grid-column: 1; }
   .chev { grid-column: 2; grid-row: 1; }
 }
+
+/* ===== Login card v4: slim smoked-glass card that blends into the film (background untouched) ===== */
+.vlogin .vl-formwrap { max-width: 352px; }
+.vlogin .vl-form {
+  --vl-ink: #fff; --vl-soft: rgba(255,255,255,.74); --vl-faint: rgba(255,255,255,.52); --vl-red: #ffb0a8; --vl-green: #8be8bd;
+  gap: 13px; padding: 26px 24px 20px; border-radius: 24px; color: #fff;
+  background: linear-gradient(165deg, rgba(46,30,22,.46), rgba(26,16,12,.34));
+  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgba(255,255,255,.2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 0 0 1px rgba(255,255,255,.03), 0 30px 70px -28px rgba(0,0,0,.65);
+}
+.vlogin .vl-form h2 { font-size: 24px; letter-spacing: -.02em; font-weight: 700; }
+.vlogin .vl-sub { font-size: 13px; margin: -6px 0 2px; }
+.vlogin .vl-form label { font-size: 12px; font-weight: 500; letter-spacing: .02em; color: rgba(255,255,255,.82); gap: 6px; }
+.vlogin .vl-field { background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.2); border-radius: 12px; padding: 0 12px; color: var(--vl-faint); }
+.vlogin .vl-field input { font-size: 14px; padding: 12px 0; color: #fff; }
+.vlogin .vl-field input::placeholder { color: rgba(255,255,255,.45); }
+.vlogin .vl-field:focus-within { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.75); box-shadow: 0 0 0 4px rgba(255,255,255,.12); }
+.vlogin .vl-field.bad { border-color: #ffb0a8; }
+.vlogin .vl-field input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #4a382f inset; -webkit-text-fill-color: #fff; caret-color: #fff; }
+.vlogin .vl-eye { color: rgba(255,255,255,.6); }
+.vlogin .vl-eye:hover { color: #fff; }
+.vlogin .vl-row a, .vlogin .vl-back { color: rgba(255,255,255,.7); font-size: 12px; }
+.vlogin .vl-row a:hover, .vlogin .vl-back:hover { color: #fff; }
+/* primary: solid white pill, dark text */
+.vlogin .vl-btn[type="submit"] { background: #fff; color: #1d1410; border-radius: 12px; padding: 13px; font-size: 14px; box-shadow: 0 10px 26px -12px rgba(0,0,0,.5); }
+.vlogin .vl-btn[type="submit"]:hover { background: #f6ede7; transform: translateY(-1px); }
+.vlogin .vl-btn[type="submit"] .spinner { border-color: rgba(29,20,16,.25); border-top-color: #1d1410; }
+/* google: glass button (overrides the inline white style) */
+.vlogin .vl-form button.vl-btn[type="button"] { background: rgba(255,255,255,.13) !important; color: #fff !important; border: 1px solid rgba(255,255,255,.3) !important; border-radius: 12px; padding: 12px; font-size: 14px; }
+.vlogin .vl-form button.vl-btn[type="button"]:hover { background: rgba(255,255,255,.22) !important; transform: translateY(-1px); }
+/* "or" divider with lines */
+.vlogin .vl-form button + .vl-sub { display: flex; align-items: center; gap: 12px; margin: 2px 0 !important; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.55); }
+.vlogin .vl-form button + .vl-sub::before, .vlogin .vl-form button + .vl-sub::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.22); }
+.vlogin .vl-note { font-size: 11.5px; color: rgba(255,255,255,.6); }
+@media (max-width: 520px) { .vlogin .vl-form { padding: 22px 18px 16px; } }
