@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { rpc, logActivity } from '../supabase.js';
-import { rs, inr, iso } from '../lib/format.js';
+import { supabase, rpc, logActivity } from '../supabase.js';
+import { rs, inr, iso, presetRange } from '../lib/format.js';
+import { fetchAllLines, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 
 /*
@@ -36,7 +37,11 @@ export default function SalesReport({ ctx }) {
   const now = new Date();
   const [month, setMonth] = useState(ym(now));
   const [measure, setMeasure] = useState('taxable');
-  const [wloc, setWloc] = useState(null);
+  const [wloc, setWloc] = useState(null); // warehouse filter for the whole report (null = both)
+  const [dFrom, setDFrom] = useState(() => presetRange('month')[0]);
+  const [dTo, setDTo] = useState(() => presetRange('month')[1]);
+  const [prod, setProd] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const monthOptions = Array.from({ length: 18 }, (_, i) => ym(new Date(now.getFullYear(), now.getMonth() - i, 1)));
   const from = iso(monthStart(shiftMonth(month, -5)));
@@ -53,9 +58,10 @@ export default function SalesReport({ ctx }) {
     if (!data) return null;
     const val = (r) => Number(measure === 'taxable' ? r.taxable : r.total) || 0;
     const mk = (r) => String(r.month).slice(0, 7);
-    const cur = data.filter((r) => mk(r) === month);
+    const dataF = wloc ? data.filter((r) => r.location === wloc) : data;
+    const cur = dataF.filter((r) => mk(r) === month);
     const prevKey = shiftMonth(month, -1);
-    const prev = data.filter((r) => mk(r) === prevKey);
+    const prev = dataF.filter((r) => mk(r) === prevKey);
     const weeks = weekRanges(month);
     const weekNums = Object.keys(weeks).map(Number);
 
@@ -68,7 +74,7 @@ export default function SalesReport({ ctx }) {
       const v = val(r);
       groups[g].total += v;
       if (r.location === 'Okhla') groups[g].okhla += v; else groups[g].gurgaon += v;
-      if (!wloc || r.location === wloc) groups[g].weeks[r.week] = (groups[g].weeks[r.week] || 0) + v;
+      groups[g].weeks[r.week] = (groups[g].weeks[r.week] || 0) + v;
     }
     const rows = Object.values(groups).sort((a, b) => b.total - a.total);
     const weekTotals = Object.fromEntries(weekNums.map((w) => [w, rows.reduce((s, g) => s + (g.weeks[w] || 0), 0)]));
@@ -83,7 +89,7 @@ export default function SalesReport({ ctx }) {
     // 6-month trend
     const months = Array.from({ length: 6 }, (_, i) => shiftMonth(month, i - 5));
     const tg = {};
-    for (const r of data) {
+    for (const r of dataF) {
       const g = r.item_group;
       color[g] = color[g] || brandColor[r.brand_id] || '#5e6ad2';
       tg[g] = tg[g] || { name: g, m: {} };
@@ -107,7 +113,7 @@ export default function SalesReport({ ctx }) {
     const n = (v) => Math.round((v || 0) * 100) / 100;
     const title = [`${ctx.brandName} · Sales report · ${mLabel} · ${measureLabel}`];
 
-    const w1 = [title, [`Week wise · ${wloc || 'Combined'}`], [],
+    const w1 = [title, [`Week wise · ${wloc || 'Okhla + Gurgaon'}`], [],
       ['Brand', 'Total', ...R.weekNums.map((w) => `Week ${w} (${wkLabel(w)})`)],
       ['Total', n(R.weekGrand), ...R.weekNums.map((w) => n(R.weekTotals[w]))],
       ...R.rows.map((g) => [g.name, n(R.weekNums.reduce((s, w) => s + (g.weeks[w] || 0), 0)), ...R.weekNums.map((w) => n(g.weeks[w]))])];
@@ -133,10 +139,53 @@ export default function SalesReport({ ctx }) {
     ctx.notify('Sales report downloaded');
   }
 
+  const pickRange = (key) => {
+    if (key === 'sel') { setDFrom(iso(monthStart(month))); setDTo(iso(new Date(monthStart(month).getFullYear(), monthStart(month).getMonth() + 1, 0))); return; }
+    const [f, t] = presetRange(key); setDFrom(f); setDTo(t);
+  };
+  async function downloadLines() {
+    if (!dFrom || !dTo || dFrom > dTo) { ctx.notify('Pick a valid From and To date', true); return; }
+    setBusy(true);
+    try {
+      let lines = await fetchAllLines(supabase, { from: dFrom, to: dTo, loc: wloc, brand: ctx.brand });
+      const q = prod.trim().toLowerCase();
+      if (q) lines = lines.filter((l) => [l.item_name, l.item_code, l.item_group].some((x) => String(x || '').toLowerCase().includes(q)));
+      if (!lines.length) { ctx.notify('No sales lines for these filters', true); return; }
+      const brandNames = Object.fromEntries((ctx.brands || []).map((b) => [b.id, b.name]));
+      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+      downloadMasterXlsx(`${ctx.brandName} sales ${wloc || 'all'}${q ? ' ' + q : ''} ${dFrom} to ${dTo}.xlsx`, lines, links, brandNames);
+      logActivity('export', { page: 'sales-report-lines', from: dFrom, to: dTo, loc: wloc, product: q || null });
+      ctx.notify(`Downloaded ${lines.length} lines`);
+    } catch (e) {
+      ctx.notify(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const dl = (
+    <section className="card">
+      <div className="card-h">
+        <div><h2>Download sales data</h2><span className="sub">Line-wise Excel in the master format · pick any dates, product and warehouse (warehouse follows the filter at the top)</span></div>
+      </div>
+      <div className="controls" style={{ alignItems: 'flex-end' }}>
+        <label className="dates"><span className="muted">From</span><input type="date" value={dFrom} max={dTo} onChange={(e) => setDFrom(e.target.value)} /></label>
+        <label className="dates"><span className="muted">To</span><input type="date" value={dTo} min={dFrom} onChange={(e) => setDTo(e.target.value)} /></label>
+        <div className="chips">
+          <button className="chip" onClick={() => pickRange('sel')}>Selected month</button>
+          <button className="chip" onClick={() => pickRange('month')}>This month</button>
+          <button className="chip" onClick={() => pickRange('lastmonth')}>Last month</button>
+          <button className="chip" onClick={() => pickRange('7d')}>Last 7 days</button>
+        </div>
+        <label className="search"><span style={{ display: 'flex' }}>{Icon.search ? Icon.search() : null}</span><input placeholder="Product name or code (optional)" value={prod} onChange={(e) => setProd(e.target.value)} /></label>
+        <button className="btn btn-pri" disabled={busy} onClick={downloadLines}>{busy ? <span className="spinner" /> : Icon.download()} Download line-wise data</button>
+      </div>
+    </section>
+  );
+
   const head = (
     <header className="ph">
       <div>
-        <div className="crumb">{ctx.brandName} · Okhla + Gurgaon · {measureLabel}</div>
+        <div className="crumb">{ctx.brandName} · {wloc || 'Okhla + Gurgaon'} · {measureLabel}</div>
         <h1>Sales report</h1>
       </div>
       <div className="controls">
@@ -146,6 +195,11 @@ export default function SalesReport({ ctx }) {
             {monthOptions.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
           </select>
         </label>
+        <div className="seg" role="group" aria-label="Warehouse">
+          {[[null, 'All'], ['Okhla', 'Okhla'], ['Gurgaon', 'Gurgaon']].map(([v, l]) => (
+            <button key={l} className={wloc === v ? 'on' : ''} onClick={() => setWloc(v)}>{l}</button>
+          ))}
+        </div>
         <div className="seg" role="group" aria-label="Value">
           <button className={measure === 'taxable' ? 'on' : ''} onClick={() => setMeasure('taxable')}>Taxable</button>
           <button className={measure === 'total' ? 'on' : ''} onClick={() => setMeasure('total')}>Incl. GST</button>
@@ -157,7 +211,7 @@ export default function SalesReport({ ctx }) {
 
   if (loading && !data) return <main className="page">{head}<LoadingCard rows={8} /><LoadingCard rows={8} /></main>;
   if (error) return <main className="page">{head}<div className="card"><ErrorState message={error} onRetry={reload} /></div></main>;
-  if (!R.rows.length) return <main className="page">{head}<div className="card"><Empty title={`No sales in ${mLabel}`} text="Pick another month from the month box." /></div></main>;
+  if (!R.rows.length) return <main className="page">{head}<div className="card"><Empty title={`No sales in ${mLabel}${wloc ? ' · ' + wloc : ''}`} text="Pick another month or warehouse above." /></div>{dl}</main>;
 
   const change = R.prevTotal ? (R.total - R.prevTotal) / Math.abs(R.prevTotal) * 100 : null;
   const top = R.rows[0];
@@ -181,14 +235,11 @@ export default function SalesReport({ ctx }) {
         <div className="card kpi"><span className="lbl">Okhla · Gurgaon</span><span style={{ fontSize: 17, fontWeight: 600 }}>{R.total ? (R.okhla / R.total * 100).toFixed(0) : 0}% · {R.total ? (R.gurgaon / R.total * 100).toFixed(0) : 0}%</span><span className="sub">{rs(R.okhla)} · {rs(R.gurgaon)}</span></div>
       </section>
 
+      {dl}
+
       <section className="card">
         <div className="card-h">
-          <div><h2>Week wise sales · {mLabel}</h2><span className="sub">Weeks run Sunday to Saturday, same as the SALES TREND sheet · darker cell = higher sales</span></div>
-          <div className="seg" role="group" aria-label="Warehouse for week table">
-            {[[null, 'Combined'], ['Okhla', 'Okhla'], ['Gurgaon', 'Gurgaon']].map(([v, l]) => (
-              <button key={l} className={wloc === v ? 'on' : ''} onClick={() => setWloc(v)}>{l}</button>
-            ))}
-          </div>
+          <div><h2>Week wise sales · {mLabel}</h2><span className="sub">Weeks run Sunday to Saturday, same as the SALES TREND sheet · darker cell = higher sales · warehouse filter is at the top</span></div>
         </div>
         <div className="tblwrap">
           <table className="tbl" style={{ minWidth: 760 }}>
