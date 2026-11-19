@@ -230,7 +230,76 @@ export function downloadMasterXlsx(filename, lines, links, brandNames) {
   ws2['!cols'] = simpleCols.map((c) => ({ wch: /Outlet|Item$|Receiving/.test(c[0]) ? 38 : 12 }));
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Master format');
+  XLSX.utils.book_append_sheet(wb, buildSummarySheet(lines, brandNames, toDateObj), 'Summary');
+  XLSX.utils.book_append_sheet(wb, ws, 'Raw data');
   XLSX.utils.book_append_sheet(wb, ws2, 'Simple view');
   XLSX.writeFile(wb, filename);
+}
+
+
+/** "Summary" tab: key figures + by warehouse / brand / product / outlet / day. Returns are already negative in the data, so plain sums give NET. */
+function buildSummarySheet(lines, brandNames, toDateObj) {
+  const n = (v) => Math.round((Number(v) || 0) * 100) / 100;
+  const dates = lines.map((l) => String(l.document_date).slice(0, 10)).sort();
+  const brands = [...new Set(lines.map((l) => brandNames[l.brand_id] || l.item_group || '').filter(Boolean))];
+  const locs = [...new Set(lines.map((l) => l.location))].filter(Boolean);
+  const bills = (ls) => new Set(ls.filter((l) => !l.is_return).map((l) => l.document_no)).size;
+  const sum = (ls, k) => n(ls.reduce((a, l) => a + (Number(l[k]) || 0), 0));
+  const group = (keyFn) => {
+    const m = new Map();
+    for (const l of lines) { const k = keyFn(l) || '(blank)'; if (!m.has(k)) m.set(k, []); m.get(k).push(l); }
+    return [...m.entries()].map(([k, ls]) => ({ k, ls, taxable: sum(ls, 'amount') })).sort((a, b) => b.taxable - a.taxable);
+  };
+  const totalTaxable = sum(lines, 'amount');
+  const pct = (v) => (totalTaxable ? Math.round(v / totalTaxable * 1000) / 10 : 0);
+  const retLines = lines.filter((l) => l.is_return);
+  const rows = []; const dateCells = []; const bold = [];
+  const push = (r, b) => { rows.push(r); if (b) bold.push(rows.length - 1); };
+  push(['SALES SUMMARY'], true);
+  push([`${brands.slice(0, 6).join(', ') || 'All brands'}${brands.length > 6 ? ' +' + (brands.length - 6) : ''} · ${locs.length === 1 ? locs[0] : 'Okhla + Gurgaon'} · ${dates[0] || ''} to ${dates[dates.length - 1] || ''}`]);
+  push(['Net of returns · Taxable = value without GST · every figure below is calculated from the "Raw data" tab']);
+  push([]);
+  push(['KEY FIGURES'], true);
+  push(['Taxable sales (net)', totalTaxable]);
+  push(['GST', sum(lines, 'gst')]);
+  push(['Total incl. GST (net)', sum(lines, 'total_amount')]);
+  push(['Quantity (net)', sum(lines, 'qty')]);
+  push(['Sales invoices', bills(lines)]);
+  push(['Return / credit-note lines', retLines.length]);
+  push(['Returns value (taxable)', sum(retLines, 'amount')]);
+  push([]);
+  push(['BY WAREHOUSE'], true);
+  push(['Warehouse', 'Invoices', 'Qty', 'Taxable', 'GST', 'Total incl. GST', '% of taxable'], true);
+  for (const g of group((l) => l.location)) push([g.k, bills(g.ls), sum(g.ls, 'qty'), g.taxable, sum(g.ls, 'gst'), sum(g.ls, 'total_amount'), pct(g.taxable)]);
+  push([]);
+  if (brands.length > 1) {
+    push(['BY BRAND'], true);
+    push(['Brand', 'Invoices', 'Qty', 'Taxable', 'GST', 'Total incl. GST', '% of taxable'], true);
+    for (const g of group((l) => brandNames[l.brand_id] || l.item_group)) push([g.k, bills(g.ls), sum(g.ls, 'qty'), g.taxable, sum(g.ls, 'gst'), sum(g.ls, 'total_amount'), pct(g.taxable)]);
+    push([]);
+  }
+  push(['BY PRODUCT'], true);
+  push(['Item', 'Item code', 'Qty', 'Taxable', 'Total incl. GST', '% of taxable'], true);
+  for (const g of group((l) => l.item_name)) push([g.k, g.ls[0].item_code || '', sum(g.ls, 'qty'), g.taxable, sum(g.ls, 'total_amount'), pct(g.taxable)]);
+  push([]);
+  const outlets = group((l) => l.party_name);
+  push([`BY OUTLET (top ${Math.min(40, outlets.length)} of ${outlets.length})`], true);
+  push(['Outlet', 'Invoices', 'Qty', 'Taxable', 'Total incl. GST', '% of taxable'], true);
+  for (const g of outlets.slice(0, 40)) push([g.k, bills(g.ls), sum(g.ls, 'qty'), g.taxable, sum(g.ls, 'total_amount'), pct(g.taxable)]);
+  push([]);
+  push(['BY DAY'], true);
+  push(['Date', 'Invoices', 'Qty', 'Taxable', ...locs.map((x) => x + ' taxable')], true);
+  const days = group((l) => String(l.document_date).slice(0, 10)).sort((a, b) => (a.k < b.k ? -1 : 1));
+  for (const g of days) { dateCells.push(rows.length); push([toDateObj(g.k), bills(g.ls), sum(g.ls, 'qty'), g.taxable, ...locs.map((x) => sum(g.ls.filter((l) => l.location === x), 'amount'))]); }
+  push(['Total', bills(lines), sum(lines, 'qty'), totalTaxable, ...locs.map((x) => sum(lines.filter((l) => l.location === x), 'amount'))], true);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  for (const addr of Object.keys(ws)) {
+    if (addr[0] === '!') continue;
+    const c = ws[addr];
+    if (c.t === 'n') c.z = '#,##0.##';
+  }
+  for (const r of dateCells) { const c = ws[XLSX.utils.encode_cell({ r, c: 0 })]; if (c && c.t === 'n') c.z = 'dd-mm-yyyy'; }
+  ws['!cols'] = [{ wch: 44 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 14 }];
+  return ws;
 }
