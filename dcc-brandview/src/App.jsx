@@ -92,6 +92,8 @@ export default function App() {
     if (!session) { setProfile(session === null ? null : undefined); return; }
     let live = true;
     (async () => {
+      // Google sign-in: link this login to its profile if the admin added this email (no-op otherwise)
+      await supabase.rpc('claim_profile');
       const { data: p, error } = await supabase.from('profiles').select('user_id, full_name, role, brand_id, active').eq('user_id', session.user.id).maybeSingle();
       if (!live) return;
       if (error || !p || !p.active) { setProfile(false); return; }
