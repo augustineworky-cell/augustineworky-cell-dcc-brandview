@@ -9,6 +9,7 @@ import Products from './pages/Products.jsx';
 import Outlets from './pages/Outlets.jsx';
 import Invoices from './pages/Invoices.jsx';
 import SalesReport from './pages/SalesReport.jsx';
+import Appointments from './pages/Appointments.jsx';
 import Admin from './pages/Admin.jsx';
 
 const pageFromHash = () => (window.location.hash.replace(/^#\/?/, '') || 'overview').split('?')[0];
@@ -127,7 +128,7 @@ export default function App() {
     openInvoices: (party) => { setInvSearch(party); go('invoices'); },
     viewAs: (id) => { setBrandId(id); go('overview'); }
   };
-  const view = page === 'admin' && isAdmin ? 'admin' : (['overview', 'products', 'outlets', 'invoices', 'report'].includes(page) ? page : 'overview');
+  const view = page === 'admin' && isAdmin ? 'admin' : (['overview', 'products', 'outlets', 'invoices', 'report', 'po'].includes(page) ? page : 'overview');
 
   return (
     <div className="app" data-theme={theme}>
@@ -137,6 +138,7 @@ export default function App() {
       {view === 'outlets' && <Outlets ctx={ctx} />}
       {view === 'invoices' && <Invoices ctx={ctx} />}
       {view === 'report' && <SalesReport ctx={ctx} />}
+      {view === 'po' && <Appointments ctx={ctx} />}
       {view === 'admin' && <Admin ctx={ctx} />}
       <TabBar page={view} go={go} isAdmin={isAdmin} />
       <Toast toast={toast} />
