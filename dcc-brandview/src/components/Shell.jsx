@@ -3,12 +3,12 @@ import { Lockup, Icon } from './ui.jsx';
 import { initials } from '../lib/format.js';
 
 export const PAGES = [
+  { id: 'report', label: 'Sales report', icon: Icon.overview },
+  { id: 'po', label: 'PO & Appointments', icon: Icon.doc },
   { id: 'overview', label: 'Overview', icon: Icon.overview },
   { id: 'products', label: 'Products', icon: Icon.box },
   { id: 'outlets', label: 'Outlets', icon: Icon.store },
   { id: 'invoices', label: 'Invoices', icon: Icon.doc },
-  { id: 'report', label: 'Sales report', icon: Icon.overview },
-  { id: 'po', label: 'PO & Appointments', icon: Icon.doc },
   { id: 'downloads', label: 'Downloads', icon: Icon.download, to: 'overview' }
 ];
 

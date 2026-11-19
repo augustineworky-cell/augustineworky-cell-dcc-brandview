@@ -461,3 +461,80 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .vl-solo .vl-form{width:100%;max-width:400px;background:#fff;border:1px solid rgba(15,18,30,.08);box-shadow:0 30px 70px -35px rgba(15,18,30,.3);
   --vl-ink:#121418;--vl-soft:#4b515c;--vl-faint:#7c838f;--vl-red:#c93a3a;color:#121418}
 .vl-solo .vl-field{background:#f5f6f8;border-color:#e6e8ec}
+
+/* ---------- motion pack (colours untouched) ---------- */
+html { scroll-behavior: smooth; }
+@keyframes pagein { from { opacity: 0; transform: translateY(10px) scale(.995); } to { opacity: 1; transform: none; } }
+@keyframes sweepglow { 0% { background-position: -240% 0; } 100% { background-position: 240% 0; } }
+@keyframes popin { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.page { animation: pagein .45s var(--ease) both; }
+
+/* top menu: smooth pill, lift on hover, animated underline on the active page */
+.tlink { position: relative; transition: color 200ms var(--ease), background 200ms var(--ease), transform 200ms var(--ease), box-shadow 200ms var(--ease); }
+.tlink:hover { transform: translateY(-1px); }
+.tlink:active { transform: scale(.96); }
+.tlink.on::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 3px; height: 2px; border-radius: 2px; background: var(--accent); transform-origin: center; animation: underline .35s var(--ease) both; }
+.navlinks .tlink { animation: dropin .5s var(--ease) both; }
+.navlinks .tlink:nth-child(2) { animation-delay: .04s; } .navlinks .tlink:nth-child(3) { animation-delay: .08s; }
+.navlinks .tlink:nth-child(4) { animation-delay: .12s; } .navlinks .tlink:nth-child(5) { animation-delay: .16s; }
+.navlinks .tlink:nth-child(6) { animation-delay: .2s; } .navlinks .tlink:nth-child(7) { animation-delay: .24s; } .navlinks .tlink:nth-child(8) { animation-delay: .28s; }
+
+/* cards: lift + accent edge on hover */
+.card { transition: transform 250ms var(--ease), box-shadow 250ms var(--ease), border-color 250ms var(--ease), background 250ms var(--ease); }
+.card:hover { box-shadow: var(--hi), 0 18px 40px -22px rgba(94,106,210,0.5); border-color: rgba(94,106,210,0.35); }
+.kpi:hover { transform: translateY(-4px); }
+.kpi .val { font-variant-numeric: tabular-nums; }
+.kpi.glow { position: relative; overflow: hidden; }
+.kpi.glow::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.10) 50%, transparent 65%); background-size: 240% 100%; animation: sweepglow 4.5s ease-in-out 1s infinite; }
+.kpis > :nth-child(6) { animation-delay: .3s; }
+
+/* buttons: press + glow */
+.btn { transition: transform 180ms var(--ease), background 180ms var(--ease), box-shadow 220ms var(--ease), border-color 180ms var(--ease); }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.97); }
+.btn-pri:hover { box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.25), 0 0 30px rgba(94,106,210,0.6); }
+.seg button, .chip { transition: all 180ms var(--ease); }
+.seg button:active, .chip:active { transform: scale(.95); }
+.seg button.on, .chip.on { animation: popin .25s var(--ease) both; }
+.iconbtn:hover { transform: rotate(8deg) scale(1.05); }
+.brandchip { transition: all 200ms var(--ease); }
+.brandchip:hover { border-color: rgba(94,106,210,0.5); box-shadow: var(--hi), 0 0 0 3px rgba(94,106,210,0.12); }
+
+/* tables: staggered row entrance + hover nudge */
+.tbl tbody tr:nth-child(1) { animation-delay: .02s; } .tbl tbody tr:nth-child(2) { animation-delay: .05s; }
+.tbl tbody tr:nth-child(3) { animation-delay: .08s; } .tbl tbody tr:nth-child(4) { animation-delay: .11s; }
+.tbl tbody tr:nth-child(5) { animation-delay: .14s; } .tbl tbody tr:nth-child(6) { animation-delay: .17s; }
+.tbl tbody tr:nth-child(7) { animation-delay: .2s; } .tbl tbody tr:nth-child(8) { animation-delay: .23s; }
+.tbl tbody tr:nth-child(n+9) { animation-delay: .26s; }
+.tbl tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 0 var(--accent); }
+.tbl td { transition: box-shadow 200ms var(--ease); }
+.pill { transition: all 180ms var(--ease); }
+.pill:hover { transform: translateY(-1px); }
+
+/* charts: bars brighten, lift and glow on hover; bars grow in staggered */
+.chart .b { transition: filter 200ms var(--ease), transform 200ms var(--ease); }
+.chart .day:hover .b { filter: brightness(1.25) drop-shadow(0 0 8px rgba(94,106,210,0.5)); }
+.chart .day:nth-child(3n) .b { animation-delay: .06s; } .chart .day:nth-child(3n+1) .b { animation-delay: .12s; } .chart .day:nth-child(3n+2) .b { animation-delay: .18s; }
+.split > div, .bar > div { transition: filter 200ms var(--ease); }
+.split:hover > div, .bar:hover > div { filter: brightness(1.2); }
+.wh { transition: transform 220ms var(--ease), border-color 220ms var(--ease); }
+.wh:hover { transform: translateY(-2px); border-color: rgba(94,106,210,0.4); }
+
+/* inputs, menus, toasts */
+.search { transition: border-color 200ms var(--ease), box-shadow 200ms var(--ease); }
+.search:focus-within { border-color: rgba(94,106,210,0.8); box-shadow: 0 0 0 3px rgba(94,106,210,0.18); }
+.dates { transition: border-color 200ms var(--ease); }
+.dates:hover { border-color: rgba(94,106,210,0.45); }
+.menu-pop { transform-origin: top right; animation: popin .22s var(--ease) both; }
+.menu-pop button { transition: all 150ms var(--ease); }
+.menu-pop button:hover { padding-left: 14px; }
+.toast { animation: rise .35s var(--ease) both; }
+.inv-row { transition: background 180ms var(--ease), transform 180ms var(--ease); }
+.inv-row:hover { transform: translateX(3px); }
+.state .ic { animation: floaty 3.5s ease-in-out infinite; }
+.ph h1 { animation: rise .6s var(--ease) .05s both; }
+.tabbar button { transition: all 180ms var(--ease); }
+.tabbar button:active { transform: scale(.9); }
+.tabbar button.on { animation: popin .25s var(--ease) both; }

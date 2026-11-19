@@ -110,3 +110,28 @@ export function Toast({ toast }) {
   if (!toast) return null;
   return <div className={'toast' + (toast.err ? ' err' : '')} role="status">{toast.msg}</div>;
 }
+
+
+/* Animated number: counts up from 0 to the formatted value (keeps prefix/suffix/Indian commas). */
+export function Count({ v, ms = 900 }) {
+  const str = String(v ?? '');
+  const m = str.match(/[\d,]+(\.\d+)?/);
+  const [txt, setTxt] = useState(str);
+  useEffect(() => {
+    if (!m || (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { setTxt(str); return undefined; }
+    const target = parseFloat(m[0].replace(/,/g, ''));
+    const dec = m[1] ? m[1].length - 1 : 0;
+    const pre = str.slice(0, m.index), post = str.slice(m.index + m[0].length);
+    let raf, t0;
+    const step = (t) => {
+      if (t0 === undefined) t0 = t;
+      const p = Math.min(1, (t - t0) / ms);
+      const e = 1 - Math.pow(1 - p, 3);
+      setTxt(pre + (target * e).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + post);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [str]);
+  return <>{txt}</>;
+}

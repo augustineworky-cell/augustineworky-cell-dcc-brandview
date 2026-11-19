@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { supabase, logActivity } from '../supabase.js';
 import { inr } from '../lib/format.js';
 import { downloadPoXlsx, poTitle } from '../lib/poExcel.js';
-import { useLoad, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
+import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 
 /*
  * PO & Appointments: the PO appointment sheet, synced into the database every 30 minutes.
@@ -86,10 +86,10 @@ export default function Appointments({ ctx }) {
     <main className="page">
       {head}
       <section className="kpis">
-        <div className="card kpi"><span className="lbl">POs</span><span className="val">{inr(T.pos)}</span><span className="sub">{inr(T.lines)} item lines</span></div>
-        <div className="card kpi"><span className="lbl">Total PO qty</span><span className="val">{inr(T.qty)}</span><span className="sub">pcs ordered</span></div>
-        <div className="card kpi"><span className="lbl">Dispatched</span><span className="val">{inr(T.disp)}</span><span className="sub">{T.qty ? (T.disp / T.qty * 100).toFixed(1) : 0}% of PO qty</span></div>
-        <div className="card kpi"><span className="lbl">Balance</span><span className="val">{inr(T.bal)}</span><span className="sub">still to dispatch</span></div>
+        <div className="card kpi"><span className="lbl">POs</span><span className="val"><Count v={inr(T.pos)} /></span><span className="sub">{inr(T.lines)} item lines</span></div>
+        <div className="card kpi"><span className="lbl">Total PO qty</span><span className="val"><Count v={inr(T.qty)} /></span><span className="sub">pcs ordered</span></div>
+        <div className="card kpi"><span className="lbl">Dispatched</span><span className="val"><Count v={inr(T.disp)} /></span><span className="sub">{T.qty ? (T.disp / T.qty * 100).toFixed(1) : 0}% of PO qty</span></div>
+        <div className="card kpi"><span className="lbl">Balance</span><span className="val"><Count v={inr(T.bal)} /></span><span className="sub">still to dispatch</span></div>
       </section>
       <section className="card">
         <div className="card-h">

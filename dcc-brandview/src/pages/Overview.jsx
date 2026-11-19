@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, inWords, prevRange, presetRange, pctChange, daysBetween, cleanItem, cleanParty, fmtD } from '../lib/format.js';
 import { fetchAllLines, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
-import { useLoad, Skel, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
+import { useLoad, Skel, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 import { PageHead, DailyChart, Change, scopeLabel } from '../components/Parts.jsx';
 
 export default function Overview({ ctx }) {
@@ -74,12 +74,12 @@ export default function Overview({ ctx }) {
       <section className="kpis">
         <div className="card kpi glow">
           <span className="lbl">Net sales</span>
-          <span className="val">{rs(net)}</span>
+          <span className="val"><Count v={rs(net)} /></span>
           <Change pct={pctChange(net, Number(prev.net_sales))} />
         </div>
         <div className="card kpi">
           <span className="lbl">Invoices</span>
-          <span className="val">{inr(cur.sales_bills)}</span>
+          <span className="val"><Count v={inr(cur.sales_bills)} /></span>
           <span className="sub">{cur.sales_bills ? 'Avg ' + rs(gross / cur.sales_bills) + ' per sales bill' : '—'}</span>
         </div>
         <div className="card kpi">
@@ -89,12 +89,12 @@ export default function Overview({ ctx }) {
         </div>
         <div className="card kpi">
           <span className="lbl">Active outlets</span>
-          <span className="val">{inr(outletCount)}</span>
+          <span className="val"><Count v={inr(outletCount)} /></span>
           {idle ? <span className="sub" style={{ color: 'var(--orange)', display: 'flex', alignItems: 'center', gap: 7 }}><span className="live" style={{ background: 'var(--orange)', color: 'var(--orange)', width: 6, height: 6 }} />{idle} idle 15+ days</span> : <span className="sub">All ordered recently</span>}
         </div>
         <div className="card kpi">
           <span className="lbl">Returns</span>
-          <span className="val">{rs(Math.abs(cur.returns))}</span>
+          <span className="val"><Count v={rs(Math.abs(cur.returns))} /></span>
           <span className="sub">{gross ? (Math.abs(cur.returns) / gross * 100).toFixed(1) + '% of gross · ' : ''}{inr(cur.return_bills)} credit notes</span>
         </div>
       </section>

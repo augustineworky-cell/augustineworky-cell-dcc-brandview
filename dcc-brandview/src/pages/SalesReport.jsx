@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { rpc, logActivity } from '../supabase.js';
 import { rs, inr, iso } from '../lib/format.js';
-import { useLoad, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
+import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 
 /*
  * Sales report – same concept as the "SALES TREND" Google Sheet:
@@ -172,7 +172,7 @@ export default function SalesReport({ ctx }) {
       <section className="kpis">
         <div className="card kpi glow">
           <span className="lbl">{mLabel} sales</span>
-          <span className="val">{rs(R.total)}</span>
+          <span className="val"><Count v={rs(R.total)} /></span>
           {change === null ? <span className="sub">No data for {monthLabel(shiftMonth(month, -1))}</span> :
             <span className="sub"><span className={change >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 600 }}>{change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%</span> vs {monthLabel(shiftMonth(month, -1))} (full month)</span>}
         </div>
