@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
+import { downloadStockXlsx } from '../lib/stockExcel.js';
 import { supabase, logActivity } from '../supabase.js';
 import { inr, fmtDY } from '../lib/format.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
@@ -58,22 +58,10 @@ export default function Stock({ ctx }) {
     return { loc: l, items: rs.length, opening: sumBy(rs, 'opening'), inwards: sumBy(rs, 'inwards'), outwards: sumBy(rs, 'outwards'), closing: sumBy(rs, 'closing'), neg: rs.filter((r) => n(r.closing) < 0).length };
   }).filter((x) => x.items), [data]);
 
-  function download() {
+  async function download() {
     try {
-      const rows = data.rows;
-      const head = ['Warehouse', 'Items (SKUs)', 'Opening', 'Inwards (Received)', 'Outwards (Dispatched)', 'Closing', 'Items with negative closing'];
-      const sum = [[`Stock summary - ${ctx.brandName}`], [`Stock as on ${fmtDY(data.asOn)}`], [], head];
-      for (const b of byLoc) sum.push([b.loc, b.items, b.opening, b.inwards, b.outwards, b.closing, b.neg]);
-      sum.push(['Total', rows.length, sumBy(rows, 'opening'), sumBy(rows, 'inwards'), sumBy(rows, 'outwards'), sumBy(rows, 'closing'), rows.filter((r) => n(r.closing) < 0).length]);
-      sum.push([], ['Closing = Opening + Inwards - Outwards. Negative closing means Tally shows minus stock.']);
-      const det = [['Warehouse', 'Item Code', 'Item Name', 'Opening', 'Inwards', 'Outwards', 'Closing']];
-      for (const r of rows) det.push([r.location, r.item_code, r.item_name, n(r.opening), n(r.inwards), n(r.outwards), n(r.closing)]);
-      const wb = XLSX.utils.book_new();
-      const w1 = XLSX.utils.aoa_to_sheet(sum); w1['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 20 }, { wch: 12 }, { wch: 26 }];
-      const w2 = XLSX.utils.aoa_to_sheet(det); w2['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 52 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 11 }];
-      XLSX.utils.book_append_sheet(wb, w1, 'Summary');
-      XLSX.utils.book_append_sheet(wb, w2, 'Item detail');
-      XLSX.writeFile(wb, `${ctx.brandName} stock as on ${data.asOn}.xlsx`);
+      const brandOf = (id) => (ctx.brands.find((b) => b.id === id) || {}).name || ctx.brandName;
+      await downloadStockXlsx(`${ctx.brandName} stock as on ${data.asOn}.xlsx`, data.rows, ctx.brandName, brandOf);
       logActivity('export', { page: 'stock' });
       ctx.notify('Stock Excel downloaded');
     } catch (e) { ctx.notify(e.message || 'Download failed', true); }
