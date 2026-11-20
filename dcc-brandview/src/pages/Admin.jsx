@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, fmtD } from '../lib/format.js';
 import { parseTallyFile, summarise } from '../lib/tally.js';
@@ -222,6 +223,7 @@ export default function Admin({ ctx }) {
           </section>
 
           <LoginsCard ctx={ctx} profiles={meta.data.profiles} reload={meta.reload} />
+          <ActivityCard />
         </>
       )}
     </main>
@@ -453,6 +455,122 @@ function LoginsCard({ ctx, profiles, reload }) {
           })}</tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+
+/* ---------- Activity: who signed in, which tabs they opened, what they downloaded ---------- */
+const PAGE_NAME = { report: 'Sales report', po: 'PO & Appointments', stock: 'Stock', overview: 'Overview', products: 'Products', outlets: 'Outlets', invoices: 'Invoices', downloads: 'Downloads', admin: 'Admin' };
+const EXPORT_NAME = { 'sales-report': 'Sales report (month)', 'sales-report-lines': 'Sales report (line-wise)', 'po-appointments': 'PO & Appointments', stock: 'Stock', products: 'Products', outlets: 'Outlets', invoices: 'Invoices', 'all-lines': 'All sales lines' };
+const rangeTxt = (d) => (d && d.from && d.to ? ` · ${d.from} to ${d.to}` : d && d.month ? ` · ${d.month}` : '');
+function describe(a) {
+  const d = a.detail || {};
+  switch (a.action) {
+    case 'login': return 'Signed in';
+    case 'view': return 'Opened ' + (PAGE_NAME[d.page] || d.page || 'a page');
+    case 'export': return 'Downloaded ' + (EXPORT_NAME[d.page] || d.page || 'a report') + rangeTxt(d) + (d.product ? ` · product "${d.product}"` : '') + (d.loc ? ` · ${d.loc}` : '');
+    case 'upload': return 'Uploaded sales file';
+    case 'receiving_view': return 'Viewed a receiving copy' + (d.doc ? ' · ' + d.doc : '');
+    case 'receiving_download': return 'Downloaded a receiving copy' + (d.doc ? ' · ' + d.doc : '');
+    case 'bulk_find': return `Bulk invoice search (${d.count || 0})`;
+    case 'bulk_zip': return `Downloaded invoices ZIP (${d.count || 0})`;
+    case 'bulk_excel': return `Downloaded bulk invoice Excel (${d.count || 0})`;
+    case 'login_created': return 'Created a login' + (d.email ? ' · ' + d.email : '');
+    default: return a.action;
+  }
+}
+const TYPE_OF = { login: 'login', view: 'view', export: 'download', receiving_download: 'download', bulk_zip: 'download', bulk_excel: 'download' };
+const stamp = (t) => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+const stampFull = (t) => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+function ActivityCard() {
+  const [days, setDays] = useState(7);
+  const [who, setWho] = useState('');
+  const [type, setType] = useState('');
+  const [admins, setAdmins] = useState(false);
+  const [limit, setLimit] = useState(100);
+  const { data, error, loading, reload } = useLoad(() => rpc('admin_activity', { p_days: days, p_limit: 3000 }), [days]);
+
+  const rows = useMemo(() => (data || []).filter((a) => (admins || a.role !== 'admin') && (!who || a.user_id === who) && (!type || (TYPE_OF[a.action] || 'other') === type)), [data, admins, who, type]);
+  const people = useMemo(() => {
+    const m = new Map();
+    for (const a of data || []) {
+      if (!a.user_id || (!admins && a.role === 'admin')) continue;
+      const p = m.get(a.user_id) || { id: a.user_id, name: a.name || a.email, email: a.email, brand: a.role === 'admin' ? 'Admin' : a.brand, last: a.ts, logins: 0, downloads: 0, views: 0 };
+      if (a.ts > p.last) p.last = a.ts;
+      const t = TYPE_OF[a.action];
+      if (t === 'login') p.logins += 1; else if (t === 'download') p.downloads += 1; else if (t === 'view') p.views += 1;
+      m.set(a.user_id, p);
+    }
+    return [...m.values()].sort((x, y) => (y.last || '').localeCompare(x.last || ''));
+  }, [data, admins]);
+
+  function download() {
+    const head = ['When (IST)', 'Name', 'Email', 'Brand', 'Action'];
+    const aoa = [head, ...rows.map((a) => [stampFull(a.ts), a.name || '', a.email || '', a.role === 'admin' ? 'Admin' : (a.brand || ''), describe(a)])];
+    const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 20 }, { wch: 22 }, { wch: 32 }, { wch: 16 }, { wch: 70 }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Activity');
+    XLSX.writeFile(wb, `BrandView activity last ${days} days.xlsx`);
+  }
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <div><h2>Activity</h2><span className="sub">Who signed in, which tabs they opened and what they downloaded. Times in IST.</span></div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="seg" role="group" aria-label="Period">
+            {[[1, 'Today'], [7, '7 days'], [30, '30 days']].map(([v, l]) => <button key={v} className={days === v ? 'on' : ''} onClick={() => setDays(v)}>{l}</button>)}
+          </div>
+          <button className="btn" onClick={reload}>Refresh</button>
+          <button className="btn" disabled={!rows.length} onClick={download}>{Icon.download()} Excel</button>
+        </div>
+      </div>
+      {loading && !data ? <LoadingCard rows={4} /> : error ? (
+        <ErrorState message={/admin_activity|function/i.test(String(error)) ? 'Activity is not set up yet. Run 03_activity.sql in the Supabase SQL Editor, then refresh.' : String(error)} onRetry={reload} />
+      ) : (
+        <>
+          <div className="tblwrap">
+            <table className="tbl" style={{ minWidth: 640 }}>
+              <thead><tr><th>Person</th><th>Brand</th><th>Last active</th><th className="r">Sign-ins</th><th className="r">Tabs opened</th><th className="r">Downloads</th></tr></thead>
+              <tbody>
+                {!people.length && <tr><td colSpan={6} className="t2">No activity in this period.</td></tr>}
+                {people.map((p) => (
+                  <tr key={p.id} style={{ cursor: 'pointer', background: who === p.id ? 'var(--card-2)' : undefined }} onClick={() => { setWho(who === p.id ? '' : p.id); setLimit(100); }}>
+                    <td>{p.name}<span className="sub" style={{ marginLeft: 6 }}>{p.email}</span></td>
+                    <td>{p.brand || '—'}</td><td className="nowrap">{stamp(p.last)}</td>
+                    <td className="r">{inr(p.logins)}</td><td className="r">{inr(p.views)}</td><td className="r" style={{ fontWeight: 600 }}>{inr(p.downloads)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '16px 4px 8px' }}>
+            <div className="seg" role="group" aria-label="Type">
+              {[['', 'Everything'], ['login', 'Sign-ins'], ['view', 'Tabs opened'], ['download', 'Downloads']].map(([v, l]) => <button key={l} className={type === v ? 'on' : ''} onClick={() => { setType(v); setLimit(100); }}>{l}</button>)}
+            </div>
+            <label className="sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={admins} onChange={(e) => setAdmins(e.target.checked)} /> Include admins</label>
+            {who && <button className="btn" onClick={() => setWho('')}>Showing one person · show all</button>}
+          </div>
+          <div className="tblwrap">
+            <table className="tbl" style={{ minWidth: 640 }}>
+              <thead><tr><th>When</th><th>Who</th><th>Brand</th><th>What</th></tr></thead>
+              <tbody>
+                {!rows.length && <tr><td colSpan={4} className="t2">Nothing to show for these filters.</td></tr>}
+                {rows.slice(0, limit).map((a, i) => (
+                  <tr key={a.ts + i}>
+                    <td className="nowrap">{stamp(a.ts)}</td>
+                    <td>{a.name || a.email || 'Unknown'}</td>
+                    <td>{a.role === 'admin' ? 'Admin' : (a.brand || '—')}</td>
+                    <td style={(TYPE_OF[a.action] === 'download') ? { fontWeight: 600 } : undefined}>{describe(a)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {rows.length > limit && <div style={{ padding: '12px 4px' }}><button className="btn" onClick={() => setLimit(limit + 100)}>Show 100 more</button> <span className="sub">{limit} of {inr(rows.length)}</span></div>}
+        </>
+      )}
     </section>
   );
 }

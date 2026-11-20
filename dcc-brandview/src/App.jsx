@@ -108,6 +108,9 @@ export default function App() {
     return () => { live = false; };
   }, [session]);
 
+  // which tab each person opens (shown in Admin → Activity)
+  useEffect(() => { if (profile && profile.user_id) logActivity('view', { page }); }, [page, profile && profile.user_id]);
+
   const go = (p) => { window.location.hash = '/' + p; setPage(p); window.scrollTo({ top: 0 }); };
   const signOut = async () => { await supabase.auth.signOut(); setProfile(null); setBrands([]); setBrandId(null); };
 
