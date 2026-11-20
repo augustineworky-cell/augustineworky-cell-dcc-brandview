@@ -726,3 +726,6 @@ button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
   .hero-num .val { font-size: 26px; }
 }
 @media (hover: none) { .card.click:hover { transform: none; } .card.click:active { transform: scale(0.985); } }
+
+/* ---------- PC fit-to-screen: one design width, scaled to the window (see main.jsx) ---------- */
+@media (min-width: 761px) { .app, .login { zoom: var(--fit, 1); } }
