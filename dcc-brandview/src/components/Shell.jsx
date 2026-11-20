@@ -63,14 +63,16 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
             {photo ? <img src={photo} alt="" onError={() => setPhoto(null)} /> : initials(profile.full_name)}
           </button>
           {open && (
-            <div className="menu-pop" onMouseLeave={() => setOpen(false)}>
-              <div className="who">
-                <div style={{ fontWeight: 600 }}>{profile.full_name || 'User'}</div>
-                <div className="sub">{profile.email}</div>
-                <div className="sub">{isAdmin ? 'DCC admin · all brands' : (brands[0]?.name || '') + ' · viewer'}</div>
+            <div className="pm-back" onClick={() => setOpen(false)} role="dialog" aria-modal="true" aria-label="Profile">
+              <div className="pm-card" onClick={(e) => e.stopPropagation()}>
+                <button className="pm-x" aria-label="Close" onClick={() => setOpen(false)}>×</button>
+                <div className="pm-photo">{photo ? <img src={photo} alt="" onError={() => setPhoto(null)} /> : <span>{initials(profile.full_name)}</span>}</div>
+                <div className="pm-name">{profile.full_name || 'User'}</div>
+                <div className="pm-mail">{profile.email}</div>
+                <div className="pm-role">{isAdmin ? 'DCC admin · all brands' : (brands[0]?.name || '') + ' · viewer'}</div>
+                {isAdmin && <button className="pm-btn" onClick={() => { setOpen(false); go('admin'); }}>Admin & uploads</button>}
+                <button className="pm-btn pm-out" onClick={onSignOut}>Sign out</button>
               </div>
-              {isAdmin && <button onClick={() => { setOpen(false); go('admin'); }}>Admin & uploads</button>}
-              <button onClick={onSignOut}>Sign out</button>
             </div>
           )}
         </div>

@@ -640,3 +640,19 @@ button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
 /* avatar with photo */
 .avatar { width: 40px; height: 40px; overflow: hidden; padding: 0; display: grid; place-items: center; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* avatar bigger + WhatsApp-style profile popup */
+.avatar { width: 48px; height: 48px; }
+.pm-back { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; background: rgba(12,14,24,.55); backdrop-filter: blur(6px); animation: pmfade .2s ease both; }
+.pm-card { position: relative; width: min(340px, 100%); background: #fff; color: #14172a; border-radius: 22px; padding: 28px 24px 20px; text-align: center; box-shadow: 0 30px 80px -20px rgba(0,0,0,.45); animation: pmpop .26s cubic-bezier(.32,.72,0,1) both; }
+.pm-x { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: #f0f1f6; color: #555; font-size: 20px; line-height: 1; cursor: pointer; }
+.pm-photo { width: 168px; height: 168px; margin: 4px auto 16px; border-radius: 50%; overflow: hidden; background: #eceef6; display: grid; place-items: center; font-size: 48px; font-weight: 600; color: #5e6ad2; box-shadow: 0 10px 30px -10px rgba(40,50,120,.45); }
+.pm-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pm-name { font-size: 20px; font-weight: 650; }
+.pm-mail { margin-top: 4px; font-size: 13.5px; color: #5b6075; word-break: break-all; }
+.pm-role { margin-top: 10px; display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #eef0fb; color: #4a56b8; }
+.pm-btn { display: block; width: 100%; margin-top: 14px; padding: 11px; border-radius: 12px; border: 1px solid #e3e5ee; background: #fff; color: #14172a; font-weight: 600; cursor: pointer; }
+.pm-btn:hover { background: #f5f6fb; }
+.pm-out { color: #c0392b; border-color: #f2d4d0; margin-top: 10px; }
+@keyframes pmfade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes pmpop { from { opacity: 0; transform: scale(.92) translateY(8px) } to { opacity: 1; transform: none } }
