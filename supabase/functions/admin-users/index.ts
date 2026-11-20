@@ -46,6 +46,10 @@ Deno.serve(async (req) => {
       if (error) return json({ error: /already/i.test(error.message) ? 'This email already has a login' : error.message }, 400);
       const { error: pErr } = await admin.from('profiles').insert({ user_id: data.user.id, full_name, role, brand_id: role === 'brand' ? b.brand_id : null, active: true });
       if (pErr) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: pErr.message }, 400); }
+      // sign-in (claim_profile) deactivates any email that is not on the allow-list, so every new login goes on it too
+      const { error: aErr } = await admin.from('allowed_emails').upsert(
+        { email, full_name, role, brand_id: role === 'brand' ? b.brand_id : null, active: true }, { onConflict: 'email' });
+      if (aErr) { await admin.from('profiles').delete().eq('user_id', data.user.id); await admin.auth.admin.deleteUser(data.user.id); return json({ error: aErr.message }, 400); }
       await admin.from('activity_log').insert({ user_id: user.id, action: 'login_created', detail: { email, role, brand_id: b.brand_id ?? null } }).then(() => {}, () => {});
       return json({ ok: true, user_id: data.user.id });
     }
@@ -63,6 +67,10 @@ Deno.serve(async (req) => {
       const { error } = await admin.from('profiles').update({ active }).eq('user_id', b.user_id);
       if (error) throw error;
       await admin.auth.admin.updateUserById(b.user_id, { ban_duration: active ? 'none' : '876000h' });
+      // keep the allow-list in step, otherwise the next sign-in flips the profile back
+      const { data: tu } = await admin.auth.admin.getUserById(b.user_id);
+      const em = tu?.user?.email?.toLowerCase();
+      if (em) await admin.from('allowed_emails').update({ active }).eq('email', em);
       return json({ ok: true });
     }
 
