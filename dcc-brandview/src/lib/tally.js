@@ -188,13 +188,14 @@ const NUM_OUT = new Set(['Quantity', 'Rate', 'Discount %', 'Discount Amount', 'A
 
 /** Full master-format workbook: every Tally column + receiving-copy link, plus a simple sheet. */
 export function downloadMasterXlsx(filename, lines, links, brandNames) {
-  const cols = [...MASTER_COLS, 'Receiving copy (PDF)'];
+  const cols = [...MASTER_COLS, 'Qty Helper', 'Receiving copy (PDF)'];   // Qty Helper = last column of the Google Sheet
   const toDateObj = (s) => { if (s instanceof Date) s = iso(s); const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000 : s; };
   const data = [cols];
   for (const l of lines) {
     const raw = l.raw || {};
     data.push(cols.map((c) => {
       if (c === 'Receiving copy (PDF)') return links[l.document_no] || '';
+      if (c === 'Qty Helper') return Number(l.qty) || 0;
       let v = raw[c];
       if ((v === undefined || v === null || v === '') && FALLBACK[c]) v = l[FALLBACK[c]];
       if (c === 'Document Date') return toDateObj(l.document_date);
@@ -231,7 +232,7 @@ export function downloadMasterXlsx(filename, lines, links, brandNames) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, buildSummarySheet(lines, brandNames, toDateObj), 'Summary');
-  XLSX.utils.book_append_sheet(wb, ws, 'Raw data');
+  XLSX.utils.book_append_sheet(wb, ws, 'Master Sale sheet');
   XLSX.utils.book_append_sheet(wb, ws2, 'Simple view');
   XLSX.writeFile(wb, filename);
 }
@@ -257,7 +258,7 @@ function buildSummarySheet(lines, brandNames, toDateObj) {
   const push = (r, b) => { rows.push(r); if (b) bold.push(rows.length - 1); };
   push(['SALES SUMMARY'], true);
   push([`${brands.slice(0, 6).join(', ') || 'All brands'}${brands.length > 6 ? ' +' + (brands.length - 6) : ''} · ${locs.length === 1 ? locs[0] : 'Okhla + Gurgaon'} · ${dates[0] || ''} to ${dates[dates.length - 1] || ''}`]);
-  push(['Net of returns · Taxable = value without GST · every figure below is calculated from the "Raw data" tab']);
+  push(['Net of returns · Taxable = value without GST · every figure below is calculated from the "Master Sale sheet" tab']);
   push([]);
   push(['KEY FIGURES'], true);
   push(['Taxable sales (net)', totalTaxable]);
