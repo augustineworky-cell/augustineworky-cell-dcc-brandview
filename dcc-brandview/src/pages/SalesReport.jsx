@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, iso, presetRange } from '../lib/format.js';
-import { fetchAllLines, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
+import { fetchAllLines, fetchDocLinks, downloadMasterXlsx, buildMasterSheet } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 
 /*
@@ -107,8 +107,10 @@ export default function SalesReport({ ctx }) {
   const measureLabel = measure === 'taxable' ? 'Taxable value (ex-GST)' : 'Total incl. GST';
   const wkLabel = (w) => R && R.weeks[w] ? `${R.weeks[w].from}${R.weeks[w].to !== R.weeks[w].from ? '–' + R.weeks[w].to : ''} ${mShort}` : '';
 
-  function exportXlsx() {
+  async function exportXlsx() {
     if (!R) return;
+    setBusy(true);
+    try {
     const wb = XLSX.utils.book_new();
     const n = (v) => Math.round((v || 0) * 100) / 100;
     const title = [`${ctx.brandName} · Sales report · ${mLabel} · ${measureLabel}`];
@@ -151,9 +153,15 @@ export default function SalesReport({ ctx }) {
     const s3 = XLSX.utils.aoa_to_sheet(w3); s3['!cols'] = [{ wch: 32 }, ...R.shownMonths.map(() => ({ wch: 16 }))];
     XLSX.utils.book_append_sheet(wb, s3, 'Month Wise Data Add');
 
+    // raw data of the month, exactly as in the Google Sheet (tab "Master Sale sheet")
+    const lines = await fetchAllLines(supabase, { from: iso(monthStart(month)), to: iso(new Date(monthStart(month).getFullYear(), monthStart(month).getMonth() + 1, 0)), loc: wloc, brand: ctx.brand });
+    const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+    XLSX.utils.book_append_sheet(wb, buildMasterSheet(lines, links).ws, 'Master Sale sheet');
+
     XLSX.writeFile(wb, `${ctx.brandName} sales report ${mLabel}.xlsx`);
     logActivity('export', { page: 'sales-report', month });
     ctx.notify('Sales report downloaded');
+    } catch (e) { ctx.notify(e.message || 'Download failed', true); } finally { setBusy(false); }
   }
 
   const pickRange = (key) => {
@@ -221,7 +229,7 @@ export default function SalesReport({ ctx }) {
           <button className={measure === 'taxable' ? 'on' : ''} onClick={() => setMeasure('taxable')}>Taxable</button>
           <button className={measure === 'total' ? 'on' : ''} onClick={() => setMeasure('total')}>Incl. GST</button>
         </div>
-        <button className="btn btn-pri" disabled={!R || !R.rows.length} onClick={exportXlsx}>{Icon.download()} Export report</button>
+        <button className="btn btn-pri" disabled={busy || !R || !R.rows.length} onClick={exportXlsx}>{busy ? <span className="spinner" /> : Icon.download()} Export report</button>
       </div>
     </header>
   );

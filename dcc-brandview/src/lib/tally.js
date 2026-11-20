@@ -187,7 +187,8 @@ const NUM_OUT = new Set(['Quantity', 'Rate', 'Discount %', 'Discount Amount', 'A
   'GST %', 'GST', 'Sales Amount', 'Total Tax Amount', 'Total Amount', 'MRP', 'Additional Amount']);
 
 /** Full master-format workbook: every Tally column + receiving-copy link, plus a simple sheet. */
-export function downloadMasterXlsx(filename, lines, links, brandNames) {
+/** The "Master Sale sheet" tab exactly as in the Google Sheet (41 Tally columns + Qty Helper + receiving link). */
+export function buildMasterSheet(lines, links) {
   const cols = [...MASTER_COLS, 'Qty Helper', 'Receiving copy (PDF)'];   // Qty Helper = last column of the Google Sheet
   const toDateObj = (s) => { if (s instanceof Date) s = iso(s); const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000 : s; };
   const data = [cols];
@@ -212,7 +213,11 @@ export function downloadMasterXlsx(filename, lines, links, brandNames) {
   ws['!cols'] = cols.map((c) => ({ wch: /Address/.test(c) ? 45 : /Party Name|Item Name|Receiving/.test(c) ? 38 : Math.max(10, c.length + 2) }));
   ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: li } }) };
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+  return { ws, toDateObj };
+}
 
+export function downloadMasterXlsx(filename, lines, links, brandNames) {
+  const { ws, toDateObj } = buildMasterSheet(lines, links);
   const simpleCols = [['Date', 'document_date'], ['Invoice', 'document_no'], ['Type', 'type'], ['Warehouse', 'location'], ['Brand', 'brand'], ['Outlet', 'party_name'],
     ['Item code', 'item_code'], ['Item', 'item_name'], ['Qty', 'qty'], ['UOM', 'uom'], ['Rate', 'rate'], ['Taxable', 'amount'], ['GST', 'gst'], ['Total', 'total_amount'], ['Receiving copy (PDF)', 'pdf']];
   const sdata = [simpleCols.map((c) => c[0]), ...lines.map((l) => simpleCols.map(([, k]) => {
