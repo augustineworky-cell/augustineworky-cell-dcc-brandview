@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, inWords, prevRange, presetRange, pctChange, daysBetween, cleanItem, cleanParty, fmtD } from '../lib/format.js';
 import { fetchAllLines, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
@@ -9,15 +9,16 @@ export default function Overview({ ctx }) {
   const args = { p_from: ctx.from, p_to: ctx.to, p_location: ctx.loc, p_brand: ctx.brand };
   const [pf, pt] = prevRange(ctx.from, ctx.to);
   const { data, error, loading, reload } = useLoad(async () => {
-    const [cur, prev, daily, products, outlets, invoices] = await Promise.all([
+    const [cur, prev, daily, prevDaily, products, outlets, invoices] = await Promise.all([
       rpc('rpt_summary', args),
       rpc('rpt_summary', { ...args, p_from: pf, p_to: pt }),
       rpc('rpt_daily', args),
+      rpc('rpt_daily', { ...args, p_from: pf, p_to: pt }),
       rpc('rpt_products', args),
       rpc('rpt_outlets', args),
       rpc('rpt_invoices', { ...args, p_limit: 6 })
     ]);
-    return { cur: cur[0], prev: prev[0], daily, products, outlets, invoices };
+    return { cur: cur[0], prev: prev[0], daily, prevDaily, products, outlets, invoices };
   }, [ctx.from, ctx.to, ctx.loc, ctx.brand]);
 
   const [busy, setBusy] = useState(false);
@@ -43,12 +44,12 @@ export default function Overview({ ctx }) {
     </button>
   );
 
-  const head = <PageHead ctx={ctx} crumb={<><span className="live" style={{ background: '#4cb782', color: '#4cb782', width: 6, height: 6 }} />{scopeLabel(ctx)}</>} title="Sales overview">{downloadBtn}</PageHead>;
+  const head = <PageHead ctx={ctx} crumb={<><span className="live" style={{ background: '#4cb782', color: '#4cb782', width: 6, height: 6 }} />{scopeLabel(ctx)}</>} title={greet(ctx.userName)}>{downloadBtn}</PageHead>;
 
   if (loading && !data) return <main className="page">{head}<Kskel /><div className="grid"><LoadingCard rows={8} /><LoadingCard rows={8} /></div></main>;
   if (error) return <main className="page">{head}<div className="card"><ErrorState message={error} onRetry={reload} /></div></main>;
 
-  const { cur, prev, daily, products, outlets, invoices } = data;
+  const { cur, prev, daily, prevDaily, products, outlets, invoices } = data;
   const net = Number(cur.net_sales);
   if (!Number(cur.sales_bills) && !Number(cur.return_bills)) {
     return <main className="page">{head}<div className="card"><Empty action={<button className="btn btn-pri" onClick={() => { const [from, to] = presetRange('fy'); ctx.setF({ preset: 'fy', from, to, loc: null }); }}>Show this financial year</button>} /></div></main>;
@@ -67,63 +68,73 @@ export default function Overview({ ctx }) {
     return m;
   }, {})).sort((a, b) => b.net - a.net).slice(0, 6);
   const gross = Number(cur.gross_sales);
+  const lastBill = daily.reduce((m, d) => (Number(d.net_sales) && d.day > m ? d.day : m), '');
+  const retPct = gross ? Math.abs(cur.returns) / gross * 100 : 0;
+  const attn = [
+    idle ? { t: 'Outlets with no order in 15+ days', n: idle, go: () => ctx.go('outlets') } : null,
+    retPct >= 3 ? { t: 'Returns at ' + retPct.toFixed(1) + '% of gross', n: inr(cur.return_bills) + ' CNs', go: () => ctx.go('invoices') } : null,
+    Number(cur.return_bills) && retPct < 3 ? { t: 'Credit notes this period', n: inr(cur.return_bills), go: () => ctx.go('invoices') } : null
+  ].filter(Boolean);
 
   return (
     <main className="page">
       {head}
-      <section className="kpis">
-        <div className="card kpi glow">
-          <span className="lbl">Net sales</span>
-          <span className="val"><Count v={rs(net)} /></span>
-          <Change pct={pctChange(net, Number(prev.net_sales))} />
+      <section className="hero-grid">
+        <div className="card hero click" onClick={() => ctx.go('report')}>
+          <div className="hero-top"><span className="lbl">Net sales · {periodShort(ctx)}</span><span className="hero-link">Open sales report →</span></div>
+          <div className="hero-num"><span className="val"><Count v={rs(net)} /></span><Change pct={pctChange(net, Number(prev.net_sales))} label="vs previous period" /></div>
+          <TrendChart cur={daily} prev={prevDaily} />
+          <div className="hero-foot">
+            <span><i style={{ background: 'var(--accent)' }} />This period</span>
+            <span><i className="dash" />Previous period</span>
+            {lastBill && <span className="muted" style={{ marginLeft: 'auto' }}>Latest bill {fmtD(lastBill)}</span>}
+          </div>
         </div>
-        <div className="card kpi">
+        <div className="wh-stack">
+          {[['Okhla', 'Okhla, Delhi', okhla, 'var(--okhla)'], ['Gurgaon', 'Gurgaon, Haryana', gurgaon, 'var(--gurgaon)']].filter(([k]) => !ctx.loc || ctx.loc === k).map(([k, n, v, c], i) => (
+            <div key={k} className="card whc click" style={{ animationDelay: (0.08 + i * 0.06) + 's' }} onClick={() => ctx.setF({ preset: ctx.preset, from: ctx.from, to: ctx.to, loc: k })} title={'Show only ' + k}>
+              <span className="ic" style={{ color: c, background: `color-mix(in srgb, ${c} 12%, transparent)` }}>{Icon.store(17)}</span>
+              <div className="whc-b"><span className="lbl">{n}</span><span className="val2"><Count v={rs(v)} /></span></div>
+              <span className="muted">{(Math.abs(v) / whTotal * 100).toFixed(0)}%</span>
+            </div>
+          ))}
+          <p className="sub words">{inWords(net)}</p>
+        </div>
+      </section>
+
+      <section className="mini-grid">
+        <div className="card attn">
+          <div className="card-h" style={{ marginBottom: 6 }}><h2><span className="ic sm" style={{ color: 'var(--orange)', background: 'color-mix(in srgb, var(--orange) 14%, transparent)' }}>!</span>Needs attention</h2>{attn.length > 0 && <span className="pillc warn">{attn.length}</span>}</div>
+          {attn.length ? attn.map((a) => (
+            <button key={a.t} className="attn-row" onClick={a.go}><span>{a.t}</span><span className="attn-n">{a.n} →</span></button>
+          )) : <p className="sub" style={{ margin: '6px 0 0' }}>Nothing to flag for this period.</p>}
+        </div>
+        <div className="card kpi click" onClick={() => ctx.go('invoices')}>
           <span className="lbl">Invoices</span>
           <span className="val"><Count v={inr(cur.sales_bills)} /></span>
-          <span className="sub">{cur.sales_bills ? 'Avg ' + rs(gross / cur.sales_bills) + ' per sales bill' : '—'}</span>
+          <span className="sub">{cur.sales_bills ? 'Avg ' + rs(gross / cur.sales_bills) + ' per bill' : '—'}</span>
         </div>
-        <div className="card kpi">
+        <div className="card kpi click" onClick={() => ctx.go('products')}>
           <span className="lbl">Quantity sold</span>
           <span className="val">{inr(cur.qty)} <small>pcs</small></span>
           <span className="sub">{inr(cur.skus)} SKUs billed</span>
         </div>
-        <div className="card kpi">
+        <div className="card kpi click" onClick={() => ctx.go('outlets')}>
           <span className="lbl">Active outlets</span>
           <span className="val"><Count v={inr(outletCount)} /></span>
-          {idle ? <span className="sub" style={{ color: 'var(--orange)', display: 'flex', alignItems: 'center', gap: 7 }}><span className="live" style={{ background: 'var(--orange)', color: 'var(--orange)', width: 6, height: 6 }} />{idle} idle 15+ days</span> : <span className="sub">All ordered recently</span>}
-        </div>
-        <div className="card kpi">
-          <span className="lbl">Returns</span>
-          <span className="val"><Count v={rs(Math.abs(cur.returns))} /></span>
-          <span className="sub">{gross ? (Math.abs(cur.returns) / gross * 100).toFixed(1) + '% of gross · ' : ''}{inr(cur.return_bills)} credit notes</span>
+          <span className="sub">{idle ? idle + ' idle 15+ days' : 'All ordered recently'}</span>
         </div>
       </section>
 
-      <section className="grid">
-        <div className="card span2">
-          <div className="card-h">
-            <div><h2>Daily sales</h2><span className="sub">Billed value per day, net of returns · hover a bar for amounts</span></div>
-            <div className="legend">
-              {ctx.loc !== 'Gurgaon' && <span><i style={{ background: 'var(--okhla)' }} />Okhla</span>}
-              {ctx.loc !== 'Okhla' && <span><i style={{ background: 'var(--gurgaon)' }} />Gurgaon</span>}
-            </div>
+      <section className="card">
+        <div className="card-h">
+          <div><h2>Daily sales by warehouse</h2><span className="sub">Billed value per day, net of returns · hover a bar for amounts</span></div>
+          <div className="legend">
+            {ctx.loc !== 'Gurgaon' && <span><i style={{ background: 'var(--okhla)' }} />Okhla</span>}
+            {ctx.loc !== 'Okhla' && <span><i style={{ background: 'var(--gurgaon)' }} />Gurgaon</span>}
           </div>
-          <DailyChart rows={daily} loc={ctx.loc} />
         </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <h2>By warehouse</h2>
-          <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 }}>
-            <div style={{ width: (Math.abs(okhla) / whTotal * 100) + '%', background: 'var(--okhla)', transformOrigin: 'left', animation: 'fillx 1s var(--ease) .4s both' }} />
-            <div style={{ width: (Math.abs(gurgaon) / whTotal * 100) + '%', background: 'var(--gurgaon)', transformOrigin: 'left', animation: 'fillx 1s var(--ease) .5s both' }} />
-          </div>
-          {[['Okhla, Delhi', okhla], ['Gurgaon, Haryana', gurgaon]].map(([n, v]) => (
-            <div className="wh" key={n}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}><span style={{ fontWeight: 500, fontSize: 13 }}>{n}</span><span className="sub">{(Math.abs(v) / whTotal * 100).toFixed(1)}% of sales</span></div>
-              <span style={{ fontWeight: 600, fontSize: 16, letterSpacing: '-0.03em' }}>{rs(v)}</span>
-            </div>
-          ))}
-          <p className="sub" style={{ margin: 0, lineHeight: 1.55 }}>{inWords(net)}</p>
-        </div>
+        <DailyChart rows={daily} loc={ctx.loc} />
       </section>
 
       <section className="grid">
@@ -197,5 +208,55 @@ function Kskel() {
         <div key={i} className="card kpi"><Skel h={11} w="50%" /><Skel h={26} w="80%" /><Skel h={10} w="60%" /></div>
       ))}
     </section>
+  );
+}
+
+function greet(name) {
+  const h = new Date().getHours();
+  const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const first = (name || '').trim().split(/\s+/)[0];
+  return first ? `${g}, ${first}` : 'Sales overview';
+}
+
+function periodShort(ctx) {
+  return fmtD(ctx.from) + ' – ' + fmtD(ctx.to);
+}
+
+/** Smooth line: this period's daily net sales vs the previous period, aligned by day number. Hover shows the day's value. */
+function TrendChart({ cur, prev }) {
+  const sum = (rows) => {
+    const m = {};
+    for (const r of rows) m[r.day] = (m[r.day] || 0) + (Number(r.net_sales) || 0);
+    return Object.keys(m).sort().map((k) => ({ day: k, v: m[k] }));
+  };
+  const a = sum(cur), b = sum(prev);
+  const [hov, setHov] = useState(null);
+  const ref = useRef(null);
+  if (a.length < 2) return <div style={{ height: 110 }} />;
+  const W = 600, H = 110, P = 6;
+  const n = Math.max(a.length, b.length);
+  const max = Math.max(1, ...a.map((d) => d.v), ...b.map((d) => d.v));
+  const x = (i) => (i / (n - 1)) * W;
+  const y = (v) => H - P - (Math.max(v, 0) / max) * (H - 2 * P);
+  const line = (arr) => arr.map((d, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(d.v).toFixed(1)).join(' ');
+  const move = (e) => {
+    const r = ref.current.getBoundingClientRect();
+    const i = Math.round(((e.clientX - r.left) / r.width) * (n - 1));
+    setHov(Math.max(0, Math.min(a.length - 1, i)));
+  };
+  const h = hov !== null ? a[hov] : null;
+  return (
+    <div className="trend" ref={ref} onMouseMove={move} onMouseLeave={() => setHov(null)} onClick={(e) => e.stopPropagation()}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} aria-label="Daily net sales, this period vs previous" role="img">
+        {[0.25, 0.5, 0.75].map((f) => <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="var(--grid)" vectorEffect="non-scaling-stroke" />)}
+        {b.length > 1 && <path d={line(b)} fill="none" stroke="var(--muted)" strokeOpacity=".55" strokeWidth="1.5" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />}
+        <path d={line(a) + ` L${x(a.length - 1)} ${H} L0 ${H}Z`} fill="var(--accent)" opacity=".08" />
+        <path className="trend-line" d={line(a)} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" />
+        {h && <line x1={x(hov)} x2={x(hov)} y1="0" y2={H} stroke="var(--accent)" strokeOpacity=".3" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {h && <span className="trend-dot" style={{ left: (x(hov) / W * 100) + '%', top: y(h.v) }} />}
+      {h && <div className="trend-tip" style={{ left: `clamp(0px, calc(${x(hov) / W * 100}% - 70px), calc(100% - 140px))` }}><b>{fmtD(h.day)}</b> · {rs(h.v)}{b[hov] ? <span className="muted"> · prev {rs(b[hov].v)}</span> : null}</div>}
+      <div className="trend-ax"><span>{fmtD(a[0].day)}</span><span>{fmtD(a[a.length - 1].day)}</span></div>
+    </div>
   );
 }

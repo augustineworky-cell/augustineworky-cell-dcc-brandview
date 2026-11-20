@@ -128,6 +128,7 @@ export default function App() {
     brand: isAdmin ? brandId : null,
     brandName: isAdmin ? (brands.find((b) => b.id === brandId)?.name || 'All brands') : (brands[0]?.name || 'My brand'),
     isAdmin, setF, notify, go, brands,
+    userName: profile.full_name || '',
     invSearch, setInvSearch,
     openInvoices: (party) => { setInvSearch(party); go('invoices'); },
     viewAs: (id) => { setBrandId(id); go('overview'); }
