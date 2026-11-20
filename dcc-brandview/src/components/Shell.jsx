@@ -16,8 +16,8 @@ export const PAGES = [
 
 export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignOut }) {
   const [open, setOpen] = useState(false);
-  // optional profile photo: public/avatars/<email>.jpg (falls back to initials)
-  const [photo, setPhoto] = useState(profile.email ? '/avatars/' + encodeURIComponent(profile.email.toLowerCase()) + '.jpg' : null);
+  // optional profile photo: public/avatars/<email with symbols as dashes>.jpg (falls back to initials)
+  const [photo, setPhoto] = useState(profile.email ? '/avatars/' + profile.email.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.jpg' : null);
   const navRef = useRef(null);
   const [pill, setPill] = useState(null);
   // sliding pill: follows the hovered tab, rests on the active tab
