@@ -16,6 +16,8 @@ export const PAGES = [
 
 export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignOut }) {
   const [open, setOpen] = useState(false);
+  // optional profile photo: public/avatars/<email>.jpg (falls back to initials)
+  const [photo, setPhoto] = useState(profile.email ? '/avatars/' + encodeURIComponent(profile.email.toLowerCase()) + '.jpg' : null);
   const navRef = useRef(null);
   const [pill, setPill] = useState(null);
   // sliding pill: follows the hovered tab, rests on the active tab
@@ -57,7 +59,9 @@ export function TopBar({ page, go, profile, brands, brandId, setBrandId, onSignO
       </div>
       <div className="tright">
         <div className="menu">
-          <button className="avatar" aria-label="Account" aria-expanded={open} onClick={() => setOpen(!open)}>{initials(profile.full_name)}</button>
+          <button className="avatar" aria-label="Account" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {photo ? <img src={photo} alt="" onError={() => setPhoto(null)} /> : initials(profile.full_name)}
+          </button>
           {open && (
             <div className="menu-pop" onMouseLeave={() => setOpen(false)}>
               <div className="who">
