@@ -246,12 +246,12 @@ function TrendChart({ cur, prev }) {
   };
   const h = hov !== null ? a[hov] : null;
   return (
-    <div className="trend" ref={ref} onMouseMove={move} onMouseLeave={() => setHov(null)} onClick={(e) => e.stopPropagation()}>
+    <div className="trend" ref={ref} onPointerMove={move} onPointerDown={move} onPointerLeave={() => setHov(null)} onClick={(e) => e.stopPropagation()}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} aria-label="Daily net sales, this period vs previous" role="img">
         {[0.25, 0.5, 0.75].map((f) => <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="var(--grid)" vectorEffect="non-scaling-stroke" />)}
         {b.length > 1 && <path d={line(b)} fill="none" stroke="var(--muted)" strokeOpacity=".55" strokeWidth="1.5" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />}
         <path d={line(a) + ` L${x(a.length - 1)} ${H} L0 ${H}Z`} fill="var(--accent)" opacity=".08" />
-        <path className="trend-line" d={line(a)} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" />
+        <path className="trend-line" d={line(a)} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {h && <line x1={x(hov)} x2={x(hov)} y1="0" y2={H} stroke="var(--accent)" strokeOpacity=".3" vectorEffect="non-scaling-stroke" />}
       </svg>
       {h && <span className="trend-dot" style={{ left: (x(hov) / W * 100) + '%', top: y(h.v) }} />}
