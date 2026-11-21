@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { supabase, rpc, logActivity } from '../supabase.js';
 import { rs, inr, iso, presetRange } from '../lib/format.js';
 import { fetchAllLines, fetchDocLinks, downloadMasterXlsx, buildMasterSheet } from '../lib/tally.js';
+import { downloadSalesTrendXlsx } from '../lib/salesTrendExcel.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 
 /*
@@ -111,56 +112,16 @@ export default function SalesReport({ ctx }) {
     if (!R) return;
     setBusy(true);
     try {
-    const wb = XLSX.utils.book_new();
-    const n = (v) => Math.round((v || 0) * 100) / 100;
-    const title = [`${ctx.brandName} · Sales report · ${mLabel} · ${measureLabel}`];
-
-    const chg = R.prevTotal ? n((R.total - R.prevTotal) / Math.abs(R.prevTotal) * 100) : null;
-    const w0 = [['SALES REPORT SUMMARY'], title, [`Warehouse: ${wloc || 'Okhla + Gurgaon'} · net of returns · every figure is the same as on the Sales report screen`], [],
-      ['KEY FIGURES'],
-      [`${mLabel} sales`, n(R.total)],
-      ['Change vs previous month', chg === null ? 'n/a' : `${chg}%`],
-      ['Best week', R.bestWeek ? `Week ${R.bestWeek} (${wkLabel(R.bestWeek)})` : 'n/a', R.bestWeek ? n(R.weekTotals[R.bestWeek]) : ''],
-      ['Okhla (Delhi)', n(R.okhla), R.total ? `${n(R.okhla / R.total * 100)}%` : ''],
-      ['Gurgaon (Haryana)', n(R.gurgaon), R.total ? `${n(R.gurgaon / R.total * 100)}%` : ''],
-      [],
-      ['TOP BRANDS'], ['Brand', measureLabel, '% of total'],
-      ...R.rows.slice(0, 10).map((g) => [g.name, n(g.total), R.total ? `${n(g.total / R.total * 100)}%` : '']),
-      [], ['WEEKS'], ['Week', 'Dates', measureLabel],
-      ...R.weekNums.map((w) => [`Week ${w}`, wkLabel(w), n(R.weekTotals[w])]),
-      [], ['Detail tabs: Week Wise Sales Check, Location Wise, Month Wise Data Add - same as the SALES TREND Google Sheet.']];
-    const s0 = XLSX.utils.aoa_to_sheet(w0); s0['!cols'] = [{ wch: 34 }, { wch: 26 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, s0, 'Summary');
-
-    const w1 = [title, [`Week wise · ${wloc || 'Okhla + Gurgaon'}`], [],
-      ['Brand', 'Total', ...R.weekNums.map((w) => `Week ${w} (${wkLabel(w)})`)],
-      ['Total', n(R.weekGrand), ...R.weekNums.map((w) => n(R.weekTotals[w]))],
-      ...R.rows.map((g) => [g.name, n(R.weekNums.reduce((s, w) => s + (g.weeks[w] || 0), 0)), ...R.weekNums.map((w) => n(g.weeks[w]))])];
-    const s1 = XLSX.utils.aoa_to_sheet(w1); s1['!cols'] = [{ wch: 32 }, { wch: 16 }, ...R.weekNums.map(() => ({ wch: 20 }))];
-    XLSX.utils.book_append_sheet(wb, s1, 'Week Wise Sales Check');
-
-    const w2 = [title, ['Location wise'], [],
-      ['Brand', 'Total', 'Okhla (Delhi)', 'Gurgaon (Haryana)', 'Okhla %'],
-      ['Total', n(R.total), n(R.okhla), n(R.gurgaon), R.total ? n(R.okhla / R.total * 100) : 0],
-      ...R.rows.map((g) => [g.name, n(g.total), n(g.okhla), n(g.gurgaon), g.total ? n(g.okhla / g.total * 100) : 0])];
-    const s2 = XLSX.utils.aoa_to_sheet(w2); s2['!cols'] = [{ wch: 32 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 10 }];
-    XLSX.utils.book_append_sheet(wb, s2, 'Location Wise');
-
-    const w3 = [title, ['Month on month'], [],
-      ['Brand', ...R.shownMonths.map(monthLabel)],
-      ['Total', ...R.shownMonths.map((m) => n(R.monthTotals[m]))],
-      ...R.trend.map((g) => [g.name, ...R.shownMonths.map((m) => n(g.m[m]))])];
-    const s3 = XLSX.utils.aoa_to_sheet(w3); s3['!cols'] = [{ wch: 32 }, ...R.shownMonths.map(() => ({ wch: 16 }))];
-    XLSX.utils.book_append_sheet(wb, s3, 'Month Wise Data Add');
-
-    // raw data of the month, exactly as in the Google Sheet (tab "Master Sale sheet")
-    const lines = await fetchAllLines(supabase, { from: iso(monthStart(month)), to: iso(new Date(monthStart(month).getFullYear(), monthStart(month).getMonth() + 1, 0)), loc: wloc, brand: ctx.brand });
-    const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
-    XLSX.utils.book_append_sheet(wb, buildMasterSheet(lines, links).ws, 'Master Sale sheet');
-
-    XLSX.writeFile(wb, `${ctx.brandName} sales report ${mLabel}.xlsx`);
-    logActivity('export', { page: 'sales-report', month });
-    ctx.notify('Sales report downloaded');
+      // Same layout as the boss's SALES TREND Google Sheet; brand logins only get their own rows.
+      const end = iso(new Date(monthStart(month).getFullYear(), monthStart(month).getMonth() + 1, 0));
+      const all = await rpc('rpt_trend', { p_from: '2000-01-01', p_to: end, p_brand: ctx.brand });
+      const rows = wloc ? all.filter((r) => r.location === wloc) : all;
+      const first = rows.reduce((m, r) => (String(r.month).slice(0, 10) < m ? String(r.month).slice(0, 10) : m), iso(monthStart(month)));
+      const lines = await fetchAllLines(supabase, { from: first, to: end, loc: wloc, brand: ctx.brand });
+      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+      await downloadSalesTrendXlsx(rows, lines, links, { month, measure, brandName: ctx.brandName, buildMasterSheet });
+      logActivity('export', { page: 'sales-report', month });
+      ctx.notify('Sales report downloaded');
     } catch (e) { ctx.notify(e.message || 'Download failed', true); } finally { setBusy(false); }
   }
 
