@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase, rpc, logActivity } from '../supabase.js';
-import { rs, inr, iso, presetRange } from '../lib/format.js';
+import { rs, inr, iso, presetRange, fmtD, daysBetween } from '../lib/format.js';
 import { fetchAllLines, fetchDocLinks, downloadMasterXlsx, buildMasterSheet } from '../lib/tally.js';
 import { downloadSalesTrendXlsx } from '../lib/salesTrendExcel.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
@@ -197,7 +197,7 @@ export default function SalesReport({ ctx }) {
 
   if (loading && !data) return <main className="page">{head}<LoadingCard rows={8} /><LoadingCard rows={8} /></main>;
   if (error) return <main className="page">{head}<div className="card"><ErrorState message={error} onRetry={reload} /></div></main>;
-  if (!R.rows.length) return <main className="page">{head}<div className="card"><Empty title={`No sales in ${mLabel}${wloc ? ' · ' + wloc : ''}`} text="Pick another month or warehouse above." /></div>{dl}</main>;
+  if (!R.rows.length) return <main className="page">{head}<div className="card"><Empty title={`No sales in ${mLabel}${wloc ? ' · ' + wloc : ''}`} text="Pick another month or warehouse above." /></div><DaysReport ctx={ctx} wloc={wloc} measure={measure} measureLabel={measureLabel} />{dl}</main>;
 
   const change = R.prevTotal ? (R.total - R.prevTotal) / Math.abs(R.prevTotal) * 100 : null;
   const top = R.rows[0];
@@ -220,6 +220,8 @@ export default function SalesReport({ ctx }) {
         <div className="card kpi"><span className="lbl">Top brand</span><span style={{ fontSize: 17, fontWeight: 600 }}>{top.name}</span><span className="sub">{rs(top.total)} · {R.total ? (top.total / R.total * 100).toFixed(1) : 0}% of sales</span></div>
         <div className="card kpi"><span className="lbl">Okhla · Gurgaon</span><span style={{ fontSize: 17, fontWeight: 600 }}>{R.total ? (R.okhla / R.total * 100).toFixed(0) : 0}% · {R.total ? (R.gurgaon / R.total * 100).toFixed(0) : 0}%</span><span className="sub">{rs(R.okhla)} · {rs(R.gurgaon)}</span></div>
       </section>
+
+      <DaysReport ctx={ctx} wloc={wloc} measure={measure} measureLabel={measureLabel} />
 
       {dl}
 
@@ -335,4 +337,95 @@ function pctCell(now, prev) {
   if (!prev) return <span className="muted">—</span>;
   const p = ((now || 0) - prev) / Math.abs(prev) * 100;
   return <span className={p >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 600 }}>{p >= 0 ? '+' : ''}{p.toFixed(0)}%</span>;
+}
+
+/* ---------- Sales for selected days: any 1 day up to 62 days, brand x day, Okhla / Gurgaon ---------- */
+function DaysReport({ ctx, wloc, measure, measureLabel }) {
+  const today = presetRange('today')[0];
+  const shift = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return iso(x); };
+  const [from, setFrom] = useState(shift(today, -1));
+  const [to, setTo] = useState(today);
+  const bad = !from || !to || from > to || daysBetween(from, to) > 61;
+  const { data, error, loading, reload } = useLoad(
+    () => (bad ? Promise.resolve([]) : fetchAllLines(supabase, { from, to, loc: wloc, brand: ctx.brand })),
+    [from, to, wloc, ctx.brand]
+  );
+  const pick = (k) => {
+    if (k === 'today') { setFrom(today); setTo(today); }
+    if (k === 'yday') { setFrom(shift(today, -1)); setTo(shift(today, -1)); }
+    if (k === '2d') { setFrom(shift(today, -1)); setTo(today); }
+    if (k === '3d') { setFrom(shift(today, -2)); setTo(today); }
+    if (k === '7d') { setFrom(shift(today, -6)); setTo(today); }
+  };
+  const D = useMemo(() => {
+    if (!data || bad) return null;
+    const v = (l) => Number(measure === 'total' ? l.total_amount : l.amount) || 0;
+    const days = []; for (let d = from; d <= to; d = shift(d, 1)) days.push(d);
+    const g = {};
+    for (const l of data) {
+      const k = l.item_group || 'Other';
+      const r = (g[k] = g[k] || { name: k, total: 0, okhla: 0, gurgaon: 0, d: {}, bills: new Set() });
+      const x = v(l); const day = String(l.document_date).slice(0, 10);
+      r.total += x; r.d[day] = (r.d[day] || 0) + x; r.bills.add(l.document_no);
+      if (l.location === 'Okhla') r.okhla += x; else r.gurgaon += x;
+    }
+    const rows = Object.values(g).sort((a, b) => b.total - a.total);
+    const sum = (f) => rows.reduce((s, r) => s + f(r), 0);
+    return { days, rows, total: sum((r) => r.total), okhla: sum((r) => r.okhla), gurgaon: sum((r) => r.gurgaon),
+      dayTot: Object.fromEntries(days.map((d) => [d, sum((r) => r.d[d] || 0)])), bills: new Set(data.map((l) => l.document_no)).size };
+  }, [data, from, to, measure, bad]);
+  const label = from === to ? fmtD(from) : `${fmtD(from)} – ${fmtD(to)}`;
+
+  return (
+    <section className="card">
+      <div className="card-h">
+        <div><h2>Sales for selected days · {label}</h2><span className="sub">Pick any 1 day to 2 months · {measureLabel} · net of returns · warehouse follows the filter at the top</span></div>
+      </div>
+      <div className="controls" style={{ alignItems: 'flex-end', marginBottom: 14 }}>
+        <label className="dates"><span className="muted">From</span><input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label>
+        <label className="dates"><span className="muted">To</span><input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label>
+        <div className="chips">
+          <button className="chip" onClick={() => pick('today')}>Today</button>
+          <button className="chip" onClick={() => pick('yday')}>Yesterday</button>
+          <button className="chip" onClick={() => pick('2d')}>Last 2 days</button>
+          <button className="chip" onClick={() => pick('3d')}>Last 3 days</button>
+          <button className="chip" onClick={() => pick('7d')}>Last 7 days</button>
+        </div>
+      </div>
+      {bad ? <p className="sub">Pick a From date before the To date, at most 2 months apart.</p>
+        : error ? <ErrorState message={error} onRetry={reload} />
+        : loading || !D ? <LoadingCard rows={4} />
+        : !D.rows.length ? <Empty title={`No sales on ${label}`} text="Bills for today show up after the sheet syncs (every 30 min, 9 AM to 8:30 PM)." />
+        : <>
+          <div className="kpis" style={{ marginBottom: 14 }}>
+            <div className="card kpi"><span className="lbl">Sales · {label}</span><span className="val"><Count v={rs(D.total)} /></span><span className="sub">{inr(D.bills)} bills</span></div>
+            <div className="card kpi"><span className="lbl">Okhla (Delhi)</span><span className="val">{rs(D.okhla)}</span><span className="sub">{D.total ? (D.okhla / D.total * 100).toFixed(0) : 0}% of sales</span></div>
+            <div className="card kpi"><span className="lbl">Gurgaon (Haryana)</span><span className="val">{rs(D.gurgaon)}</span><span className="sub">{D.total ? (D.gurgaon / D.total * 100).toFixed(0) : 0}% of sales</span></div>
+          </div>
+          <div className="tblwrap">
+            <table className="tbl" style={{ minWidth: 560 + D.days.length * 90 }}>
+              <thead><tr><th>Brand</th><th className="r">Total</th><th className="r">Okhla</th><th className="r">Gurgaon</th>{D.days.length > 1 && D.days.map((d) => <th key={d} className="r">{fmtD(d)}</th>)}</tr></thead>
+              <tbody>
+                <tr style={{ background: 'var(--card-2)' }}>
+                  <td style={{ fontWeight: 700 }}>Total</td>
+                  <td className="r" style={{ fontWeight: 700 }}>{rs(D.total)}</td>
+                  <td className="r" style={{ fontWeight: 700 }}>{rs(D.okhla)}</td>
+                  <td className="r" style={{ fontWeight: 700 }}>{rs(D.gurgaon)}</td>
+                  {D.days.length > 1 && D.days.map((d) => <td key={d} className="r" style={{ fontWeight: 700 }}>{D.dayTot[d] ? rs(D.dayTot[d]) : '—'}</td>)}
+                </tr>
+                {D.rows.map((r) => (
+                  <tr key={r.name}>
+                    <td style={{ fontWeight: 500 }}>{r.name}</td>
+                    <td className="r" style={{ fontWeight: 600 }}>{rs(r.total)}</td>
+                    <td className="r t2">{r.okhla ? rs(r.okhla) : '—'}</td>
+                    <td className="r t2">{r.gurgaon ? rs(r.gurgaon) : '—'}</td>
+                    {D.days.length > 1 && D.days.map((d) => <td key={d} className="r t2" style={{ color: (r.d[d] || 0) < 0 ? 'var(--orange)' : undefined }}>{r.d[d] ? rs(r.d[d]) : <span className="muted">—</span>}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>}
+    </section>
+  );
 }
