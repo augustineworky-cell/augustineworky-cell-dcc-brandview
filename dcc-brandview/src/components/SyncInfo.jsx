@@ -16,7 +16,7 @@ const ago = (t) => {
   const h = Math.floor(m / 60);
   return h < 24 ? `${h} h ${m % 60} min ago` : fmt(t);
 };
-const EVERY = { po: 'checked every 10 min, 9 am – 8:30 pm', sales: 'updated daily', stock: 'updated daily' };
+const EVERY = { po: 'checked every 10 min, 9 am – 8:30 pm', sales: 'synced manually from Admin', stock: 'synced manually from Admin' };
 
 // one shared fetch for all badges on screen, refreshed every minute
 let cache = { at: 0, data: null, p: null };
@@ -94,7 +94,7 @@ export function SyncCard({ ctx }) {
   return (
     <section className="card">
       <div className="card-h">
-        <div><h2>Sync from Google Sheets</h2><span className="sub">PO syncs by itself every 10 min (9 am – 8:30 pm). Sales and stock: press Sync now after you update the sheet (a safety run also happens at 8:45 pm).</span></div>
+        <div><h2>Sync from Google Sheets</h2><span className="sub">PO syncs by itself every 10 min (9 am – 8:30 pm). Sales and stock sync only when you press Sync now, so press it after you update those sheets.</span></div>
       </div>
       <div className="sync-row">
         {['po', 'sales', 'stock'].map((s) => (
