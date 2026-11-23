@@ -729,3 +729,15 @@ button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
 
 /* ---------- PC fit-to-screen: one design width, scaled to the window (see main.jsx) ---------- */
 @media (min-width: 761px) { .app, .login { zoom: var(--fit, 1); } }
+
+/* sync freshness + Sync now */
+.fresh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.fresh b { color: var(--text); font-weight: 500; }
+.fresh-dot { width: 7px; height: 7px; border-radius: 50%; background: #4cb782; box-shadow: 0 0 0 0 rgba(76,183,130,.5); animation: freshPulse 2.4s ease-out infinite; flex: none; }
+@keyframes freshPulse { 0% { box-shadow: 0 0 0 0 rgba(76,183,130,.45); } 70%, 100% { box-shadow: 0 0 0 7px rgba(76,183,130,0); } }
+.sync-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.sync-box { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+.sync-box .fresh { margin-top: 0; }
+.sync-name { font-weight: 600; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .fresh-dot { animation: none; } }
+.sync-box .spinner { border-color: rgba(0,0,0,.15); border-top-color: var(--accent); }

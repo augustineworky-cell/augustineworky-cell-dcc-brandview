@@ -5,6 +5,7 @@ import { rs, inr, iso, presetRange, fmtD, daysBetween } from '../lib/format.js';
 import { fetchAllLines, fetchDocLinks, downloadMasterXlsx, buildMasterSheet } from '../lib/tally.js';
 import { downloadSalesTrendXlsx } from '../lib/salesTrendExcel.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
+import { Freshness } from '../components/SyncInfo.jsx';
 
 /*
  * Sales report – same concept as the "SALES TREND" Google Sheet:
@@ -173,6 +174,7 @@ export default function SalesReport({ ctx }) {
       <div>
         <div className="crumb">{ctx.brandName} · {wloc || 'Okhla + Gurgaon'} · {measureLabel}</div>
         <h1>Sales report</h1>
+        <Freshness source="sales" />
       </div>
       <div className="controls">
         <label className="dates" style={{ gap: 8 }}>

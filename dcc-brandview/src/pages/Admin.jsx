@@ -6,6 +6,7 @@ import { parseTallyFile, summarise } from '../lib/tally.js';
 import { downloadSalesTemplate, downloadReceivingTemplate, parseReceivingFile } from '../lib/templates.js';
 import { useLoad, LoadingCard, ErrorState, Icon } from '../components/ui.jsx';
 import { PageHead } from '../components/Parts.jsx';
+import { SyncCard } from '../components/SyncInfo.jsx';
 
 const CHUNK = 500;
 
@@ -222,6 +223,7 @@ export default function Admin({ ctx }) {
             </div>
           </section>
 
+          <SyncCard ctx={ctx} />
           <LoginsCard ctx={ctx} profiles={meta.data.profiles} reload={meta.reload} />
           <ActivityCard />
         </>

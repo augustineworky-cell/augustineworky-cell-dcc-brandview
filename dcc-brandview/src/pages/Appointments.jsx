@@ -3,9 +3,10 @@ import { supabase, logActivity } from '../supabase.js';
 import { inr, iso, daysBetween } from '../lib/format.js';
 import { downloadPoXlsx, poTitle } from '../lib/poExcel.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
+import { Freshness } from '../components/SyncInfo.jsx';
 
 /*
- * PO & Appointments: the PO appointment sheet, synced into the database every 30 minutes.
+ * PO & Appointments: the PO appointment sheet, synced into the database every 10 minutes in office hours.
  * Brand logins see only their own brand's POs (row level security); admins can pick a brand.
  */
 const COLS = 'brand_id, location, po_status, party_name, po_number, po_date, po_expiry, tentative_appt, appt_date, item_code, item_desc, po_qty, dispatched_qty, balance_qty, remark1, remark2, po_key';
@@ -95,6 +96,7 @@ export default function Appointments({ ctx }) {
       <div>
         <div className="crumb">{ctx.brandName} · Delhi + Gurgaon · PO appointments</div>
         <h1>PO &amp; Appointments</h1>
+        <Freshness source="po" />
       </div>
       <div className="controls">
         <div className="seg" role="group" aria-label="PO status">
