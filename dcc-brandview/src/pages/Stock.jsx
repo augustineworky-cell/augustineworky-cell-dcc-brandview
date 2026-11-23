@@ -91,7 +91,7 @@ export default function Stock({ ctx }) {
 
   if (loading && !data) return <main className="page">{head}<LoadingCard rows={8} /></main>;
   if (error) return <main className="page">{head}<div className="card"><ErrorState message={error} onRetry={reload} /></div></main>;
-  if (!data.rows.length) return <main className="page">{head}<div className="card"><Empty title="No stock yet" text="Stock syncs from the stock sheet every 30 minutes. It will appear here after the next sync." /></div></main>;
+  if (!data.rows.length) return <main className="page">{head}<div className="card"><Empty title="No stock yet" text="Stock appears here after the stock sheet is synced." /></div></main>;
 
   const red = { color: '#c4314b', fontWeight: 600 };
   return (
