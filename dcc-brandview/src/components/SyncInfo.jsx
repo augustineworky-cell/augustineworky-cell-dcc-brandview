@@ -16,7 +16,7 @@ const ago = (t) => {
   const h = Math.floor(m / 60);
   return h < 24 ? `${h} h ${m % 60} min ago` : fmt(t);
 };
-const EVERY = { po: 'checked every 10 min, 9 am – 8:30 pm', sales: 'synced manually from Admin', stock: 'synced manually from Admin' };
+const EVERY = { po: 'checked every 10 min, 9 am – 8:30 pm', sales: 'updated daily', stock: 'updated daily' };
 
 // one shared fetch for all badges on screen, refreshed every minute
 let cache = { at: 0, data: null, p: null };
