@@ -4,6 +4,7 @@ import { rs, inr, prevRange, pctChange, cleanItem } from '../lib/format.js';
 import { downloadXlsx } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
 import { PageHead, scopeLabel } from '../components/Parts.jsx';
+import { trackDownload } from '../components/DownloadProgress.jsx';
 
 export default function Products({ ctx }) {
   const [tab, setTab] = useState('all');
@@ -21,12 +22,14 @@ export default function Products({ ctx }) {
   }, [ctx.from, ctx.to, ctx.loc, ctx.brand]);
 
   const exportBtn = (
-    <button className="btn btn-pri" disabled={!data || !data.length} onClick={() => {
+    <button className="btn btn-pri" disabled={!data || !data.length} onClick={() => trackDownload('Products', async (job) => {
+      job.step('build', `Building Excel · ${data.length.toLocaleString('en-IN')} products`, { done: data.length, total: data.length }); await job.paint();
       downloadXlsx(`${ctx.brandName} products ${ctx.from} to ${ctx.to}.xlsx`, 'Products',
         [['Item code', 'item_code'], ['Product', 'name', 'wide'], ['Qty (pcs)', 'qty'], ['Net sales', 'net'], ['Outlets', 'outlets'], ['Okhla', 'okhla_sales'], ['Gurgaon', 'gurgaon_sales'], ['Last month', 'prev']],
         data.map((p) => ({ ...p, qty: Number(p.qty), okhla_sales: Number(p.okhla_sales), gurgaon_sales: Number(p.gurgaon_sales) })));
       logActivity('export', { page: 'products', from: ctx.from, to: ctx.to });
-    }}>{Icon.download()} Export</button>
+      return `${data.length.toLocaleString('en-IN')} products`;
+    })}>{Icon.download()} Export</button>
   );
   const head = <PageHead ctx={ctx} crumb={scopeLabel(ctx)} title="Products">{exportBtn}</PageHead>;
   if (loading && !data) return <main className="page">{head}<LoadingCard rows={10} /></main>;

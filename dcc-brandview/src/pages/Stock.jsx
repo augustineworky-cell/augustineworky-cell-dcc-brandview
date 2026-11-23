@@ -3,6 +3,7 @@ import { downloadStockXlsx } from '../lib/stockExcel.js';
 import { supabase, logActivity } from '../supabase.js';
 import { inr, fmtDY } from '../lib/format.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
+import { trackDownload } from '../components/DownloadProgress.jsx';
 
 /*
  * Stock: closing stock per item and warehouse, synced from the Stock sheet (Tally stock summary).
@@ -58,13 +59,19 @@ export default function Stock({ ctx }) {
     return { loc: l, items: rs.length, opening: sumBy(rs, 'opening'), inwards: sumBy(rs, 'inwards'), outwards: sumBy(rs, 'outwards'), closing: sumBy(rs, 'closing'), neg: rs.filter((r) => n(r.closing) < 0).length };
   }).filter((x) => x.items), [data]);
 
+  const [dlBusy, setDlBusy] = useState(false);
   async function download() {
-    try {
+    setDlBusy(true);
+    await trackDownload('Stock', async (job) => {
       const brandOf = (id) => (ctx.brands.find((b) => b.id === id) || {}).name || ctx.brandName;
+      job.step('load', 'Stock rows ready', { done: data.rows.length, total: data.rows.length }); await job.paint();
+      job.step('build', `Building Excel · ${data.rows.length.toLocaleString('en-IN')} items`); await job.paint();
       await downloadStockXlsx(`${ctx.brandName} stock as on ${data.asOn}.xlsx`, data.rows, ctx.brandName, brandOf);
+      job.step('save', 'Saving file'); await job.paint();
       logActivity('export', { page: 'stock' });
-      ctx.notify('Stock Excel downloaded');
-    } catch (e) { ctx.notify(e.message || 'Download failed', true); }
+      return `${data.rows.length.toLocaleString('en-IN')} items · as on ${data.asOn}`;
+    });
+    setDlBusy(false);
   }
 
   const head = (
@@ -77,7 +84,7 @@ export default function Stock({ ctx }) {
         <div className="seg" role="group" aria-label="Warehouse">
           {[[null, 'All'], ['Okhla', 'Okhla'], ['Gurgaon', 'Gurgaon']].map(([v, l]) => <button key={l} className={loc === v ? 'on' : ''} onClick={() => setLoc(v)}>{l}</button>)}
         </div>
-        <button className="btn btn-pri" disabled={!data || !data.rows.length} onClick={download}>{Icon.download()} Download Excel</button>
+        <button className="btn btn-pri" disabled={dlBusy || !data || !data.rows.length} onClick={download}>{dlBusy ? <span className="spinner" /> : Icon.download()} {dlBusy ? 'Preparing…' : 'Download Excel'}</button>
       </div>
     </header>
   );

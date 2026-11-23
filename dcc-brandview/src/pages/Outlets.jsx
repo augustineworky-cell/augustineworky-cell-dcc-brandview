@@ -4,6 +4,7 @@ import { rs, inr, daysBetween, fmtD, cleanParty } from '../lib/format.js';
 import { downloadXlsx } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon } from '../components/ui.jsx';
 import { PageHead, scopeLabel } from '../components/Parts.jsx';
+import { trackDownload } from '../components/DownloadProgress.jsx';
 
 const STATUS = {
   active: { label: 'Active', dot: '#4cb782' },
@@ -26,12 +27,14 @@ export default function Outlets({ ctx }) {
   }, [ctx.from, ctx.to, ctx.loc, ctx.brand]);
 
   const exportBtn = (
-    <button className="btn btn-pri" disabled={!data || !data.length} onClick={() => {
+    <button className="btn btn-pri" disabled={!data || !data.length} onClick={() => trackDownload('Outlets', async (job) => {
+      job.step('build', `Building Excel · ${data.length.toLocaleString('en-IN')} outlets`, { done: data.length, total: data.length }); await job.paint();
       downloadXlsx(`${ctx.brandName} outlets ${ctx.from} to ${ctx.to}.xlsx`, 'Outlets',
         [['Outlet', 'name', 'wide'], ['Warehouse', 'location'], ['Bills', 'bills'], ['SKUs', 'skus'], ['Qty (pcs)', 'qty'], ['Net sales', 'net'], ['Last order', 'last_order'], ['Status', 'status']],
         data.map((o) => ({ ...o, qty: Number(o.qty), status: STATUS[o.st].label })));
       logActivity('export', { page: 'outlets', from: ctx.from, to: ctx.to });
-    }}>{Icon.download()} Export</button>
+      return `${data.length.toLocaleString('en-IN')} outlets`;
+    })}>{Icon.download()} Export</button>
   );
   const head = <PageHead ctx={ctx} crumb={scopeLabel(ctx)} title="Outlets">{exportBtn}</PageHead>;
   if (loading && !data) return <main className="page">{head}<LoadingCard rows={10} /></main>;

@@ -4,6 +4,7 @@ import { rs, inr, inWords, prevRange, presetRange, pctChange, daysBetween, clean
 import { fetchAllLines, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
 import { useLoad, Skel, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 import { PageHead, DailyChart, Change, scopeLabel } from '../components/Parts.jsx';
+import { trackDownload } from '../components/DownloadProgress.jsx';
 
 export default function Overview({ ctx }) {
   const args = { p_from: ctx.from, p_to: ctx.to, p_location: ctx.loc, p_brand: ctx.brand };
@@ -24,19 +25,19 @@ export default function Overview({ ctx }) {
   const [busy, setBusy] = useState(false);
   const downloadAll = async () => {
     setBusy(true);
-    try {
-      const lines = await fetchAllLines(supabase, { from: ctx.from, to: ctx.to, loc: ctx.loc, brand: ctx.brand });
+    await trackDownload('All sales lines', async (job) => {
+      job.step('load', 'Loading sales lines');
+      const lines = await fetchAllLines(supabase, { from: ctx.from, to: ctx.to, loc: ctx.loc, brand: ctx.brand, onProgress: (d, t) => job.progress(d, t) });
       const brandNames = Object.fromEntries(ctx.brands.map((b) => [b.id, b.name]));
-      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+      job.step('load', 'Loading receiving-copy links');
+      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no), (d, t) => job.progress(d, t));
+      job.step('build', `Building Excel · ${lines.length.toLocaleString('en-IN')} lines`); await job.paint();
       downloadMasterXlsx(`${ctx.brandName} sales ${ctx.from} to ${ctx.to}.xlsx`, lines, links, brandNames);
-      const rows = lines;
+      job.step('save', 'Saving file'); await job.paint();
       logActivity('export', { page: 'all-lines', from: ctx.from, to: ctx.to });
-      ctx.notify(`Downloaded ${rows.length} lines`);
-    } catch (e) {
-      ctx.notify(e.message, true);
-    } finally {
-      setBusy(false);
-    }
+      return `${lines.length.toLocaleString('en-IN')} lines`;
+    });
+    setBusy(false);
   };
   const downloadBtn = (
     <button className="btn btn-pri" disabled={busy} onClick={downloadAll}>

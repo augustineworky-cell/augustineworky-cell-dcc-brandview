@@ -12,6 +12,7 @@ import SalesReport from './pages/SalesReport.jsx';
 import Appointments from './pages/Appointments.jsx';
 import Stock from './pages/Stock.jsx';
 import Admin from './pages/Admin.jsx';
+import { DownloadProgress } from './components/DownloadProgress.jsx';
 
 const pageFromHash = () => (window.location.hash.replace(/^#\/?/, '') || 'overview').split('?')[0];
 
@@ -148,6 +149,7 @@ export default function App() {
       {view === 'admin' && <Admin ctx={ctx} />}
       <TabBar page={view} go={go} isAdmin={isAdmin} />
       <Toast toast={toast} />
+      <DownloadProgress />
     </div>
   );
 }

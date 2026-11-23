@@ -741,3 +741,39 @@ button.brandchip:hover { border-color: rgba(94,106,210,0.5); }
 .sync-name { font-weight: 600; font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .fresh-dot { animation: none; } }
 .sync-box .spinner { border-color: rgba(0,0,0,.15); border-top-color: var(--accent); }
+
+/* download progress card */
+.dlp { position: fixed; right: max(20px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: 90; width: min(380px, calc(100vw - 32px));
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 12px; box-shadow: 0 18px 50px rgba(20,24,60,.18), 0 2px 6px rgba(20,24,60,.06);
+  animation: dlpIn .45s cubic-bezier(.2,.9,.25,1.2) both; overflow: hidden; }
+.dlp::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 200% 100%; animation: dlpSweep 1.4s linear infinite; opacity: .8; }
+.dlp.ok::before, .dlp.err::before { display: none; }
+@keyframes dlpIn { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes dlpSweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.dlp-top { display: flex; align-items: center; gap: 12px; }
+.dlp-icon { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none; color: #fff; background: var(--accent); box-shadow: 0 6px 16px rgba(94,106,210,.35); }
+.dlp.ok .dlp-icon { background: #4cb782; box-shadow: 0 6px 16px rgba(76,183,130,.4); animation: dlpPop .5s cubic-bezier(.3,1.6,.5,1) both; }
+.dlp.err .dlp-icon { background: #eb5757; box-shadow: 0 6px 16px rgba(235,87,87,.35); font-weight: 700; animation: dlpShake .45s ease both; }
+.dlp-arrow { animation: dlpBob 1s ease-in-out infinite; }
+@keyframes dlpBob { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
+@keyframes dlpPop { 0% { transform: scale(.5); } 100% { transform: scale(1); } }
+@keyframes dlpShake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+.dlp-check { stroke-dasharray: 24; stroke-dashoffset: 24; animation: dlpDraw .45s .1s ease-out forwards; }
+@keyframes dlpDraw { to { stroke-dashoffset: 0; } }
+.dlp-txt { flex: 1; min-width: 0; }
+.dlp-title { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+.dlp-label { font-size: 12.5px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.dlp-label b { color: var(--text); font-variant-numeric: tabular-nums; }
+.dlp-pct { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.dlp-bar { margin-top: 12px; height: 6px; border-radius: 99px; background: rgba(94,106,210,.12); overflow: hidden; }
+.dlp-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #8b93f0); position: relative; transition: width .5s cubic-bezier(.2,.8,.2,1); }
+.dlp-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); background-size: 60% 100%; background-repeat: no-repeat; animation: dlpShine 1.2s ease-in-out infinite; }
+.dlp.ok .dlp-bar i { background: #4cb782; } .dlp.ok .dlp-bar i::after { display: none; }
+.dlp.err .dlp-bar i { background: #eb5757; } .dlp.err .dlp-bar i::after { display: none; }
+@keyframes dlpShine { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+.dlp-steps { display: flex; gap: 12px; margin-top: 9px; font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+.dlp-steps span { transition: color .25s; }
+.dlp-steps .now { color: var(--accent); font-weight: 600; }
+.dlp-steps .done { color: #3f9f70; }
+.dlp-time { margin-left: auto; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .dlp, .dlp::before, .dlp-arrow, .dlp-bar i::after, .dlp-check { animation: none !important; stroke-dashoffset: 0; } }

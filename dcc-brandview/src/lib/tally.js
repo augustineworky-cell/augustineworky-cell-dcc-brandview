@@ -151,25 +151,29 @@ export function downloadXlsx(filename, sheetName, columns, rows) {
 const LINE_COLS = 'document_date, document_no, trans_type, is_return, location, party_name, customer_code, customer_group, item_group, item_code, item_name, qty, uom, rate, discount_pct, amount, gst_pct, gst, total_amount, brand_id, raw';
 
 /** Reads every sales line for the filters, 1000 rows at a time. RLS limits brand users to their own brand. */
-export async function fetchAllLines(supabase, { from, to, loc, brand }) {
+export async function fetchAllLines(supabase, { from, to, loc, brand, onProgress }) {
   const all = [];
+  let total = 0;
   for (let start = 0; ; start += 1000) {
-    let q = supabase.from('sales_lines').select(LINE_COLS)
+    let q = supabase.from('sales_lines').select(LINE_COLS, start === 0 ? { count: 'exact' } : undefined)
       .gte('document_date', from).lte('document_date', to);
     if (loc) q = q.eq('location', loc);
     if (brand) q = q.eq('brand_id', brand);
-    const { data, error } = await q.order('document_date').order('document_no').range(start, start + 999);
+    const { data, error, count } = await q.order('document_date').order('document_no').range(start, start + 999);
     if (error) throw new Error(error.message);
+    if (start === 0 && count) total = count;
     all.push(...data);
+    onProgress?.(all.length, total || all.length);
     if (data.length < 1000) return all;
   }
 }
 
 /** Receiving-copy PDF links for these invoice numbers (RLS: brands only get their own single-brand bills). */
-export async function fetchDocLinks(supabase, docs) {
+export async function fetchDocLinks(supabase, docs, onProgress) {
   const out = {};
   const list = [...new Set(docs)];
   for (let i = 0; i < list.length; i += 100) {
+    onProgress?.(Math.min(i + 100, list.length), list.length);
     const { data, error } = await supabase.from('invoice_documents').select('document_no, file_url').in('document_no', list.slice(i, i + 100));
     if (error) return out;
     for (const d of data) out[d.document_no] = d.file_url;

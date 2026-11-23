@@ -4,6 +4,7 @@ import { rs, inr, inWords, fmtD, fmtDY, cleanItem, cleanParty } from '../lib/for
 import { downloadXlsx, fetchDocLinks, downloadMasterXlsx } from '../lib/tally.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Skel, Icon } from '../components/ui.jsx';
 import { PageHead, scopeLabel } from '../components/Parts.jsx';
+import { trackDownload, startDownload } from '../components/DownloadProgress.jsx';
 
 const PAGE = 60;
 
@@ -30,18 +31,23 @@ export default function Invoices({ ctx }) {
   }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function exportList() {
+    return trackDownload('Invoices', async (job) => {
+    job.step('load', 'Loading invoices');
     const rows = await rpc('rpt_invoices', { ...args, p_type: type, p_search: dq || null, p_limit: 20000, p_offset: 0 });
+    job.step('build', `Building Excel · ${rows.length.toLocaleString('en-IN')} invoices`, { done: rows.length, total: rows.length }); await job.paint();
     downloadXlsx(`${ctx.brandName} invoices ${ctx.from} to ${ctx.to}.xlsx`, 'Invoices',
       [['Invoice', 'document_no'], ['Date', 'document_date'], ['Outlet', 'party_name', 'wide'], ['Warehouse', 'location'], ['Type', 'kind'], ['Items', 'items'], ['Qty', 'qty'], ['Taxable', 'taxable'], ['GST', 'gst'], ['Total', 'total']],
       rows.map((v) => ({ ...v, kind: v.is_return ? 'Return' : 'Sale', qty: Number(v.qty), taxable: Number(v.taxable), gst: Number(v.gst), total: Number(v.total) })));
     logActivity('export', { page: 'invoices', from: ctx.from, to: ctx.to });
+    return `${rows.length.toLocaleString('en-IN')} invoices`;
+    });
   }
 
   const c = counts.data;
   const head = (
     <PageHead ctx={ctx} crumb={scopeLabel(ctx)} title="Invoices">
       <button className={'btn' + (bulk ? ' on' : '')} onClick={() => setBulk(!bulk)} aria-expanded={bulk}>{Icon.stack()} Bulk download</button>
-      <button className="btn btn-pri" onClick={() => exportList().catch((e) => ctx.notify(e.message, true))}>{Icon.download()} Export</button>
+      <button className="btn btn-pri" onClick={() => exportList()}>{Icon.download()} Export</button>
     </PageHead>
   );
   const rows = list.data ? list.data.slice(0, limit) : [];
@@ -213,9 +219,11 @@ function Bulk({ ctx, onClose }) {
   async function zip() {
     const docs = res.found.filter((r) => r.pdf).map((r) => r.document_no);
     const parts = Math.ceil(docs.length / ZIP_BATCH);
+    const job = startDownload(`${docs.length} receiving copies (ZIP)`);
     try {
       for (let p = 0; p < parts; p++) {
         setBusy(`Preparing ZIP ${parts > 1 ? `${p + 1} of ${parts}` : ''}…`);
+        job.step('load', `Collecting PDFs${parts > 1 ? ` · ZIP ${p + 1} of ${parts}` : ''}`, { done: p * ZIP_BATCH, total: docs.length });
         const { data, error } = await supabase.functions.invoke('receiving-zip', { body: { docs: docs.slice(p * ZIP_BATCH, (p + 1) * ZIP_BATCH) } });
         if (error) {
           let msg = error.message;
@@ -223,6 +231,7 @@ function Bulk({ ctx, onClose }) {
           if (/failed to send|not found|404/i.test(msg)) msg = 'ZIP download is not set up in Supabase yet (receiving-zip function).';
           throw new Error(msg);
         }
+        job.step('save', 'Saving ZIP', { done: Math.min((p + 1) * ZIP_BATCH, docs.length), total: docs.length });
         const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/zip' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -231,15 +240,19 @@ function Bulk({ ctx, onClose }) {
         setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       }
       logActivity('bulk_zip', { count: docs.length });
-      ctx.notify(`Downloaded ${docs.length} receiving copies`);
-    } catch (e) { ctx.notify(e.message, true); } finally { setBusy(''); }
+      job.done(`${docs.length} receiving copies`);
+    } catch (e) { job.fail(e.message); } finally { setBusy(''); }
   }
 
   function excel() {
-    const brandNames = Object.fromEntries(ctx.brands.map((b) => [b.id, b.name]));
-    downloadMasterXlsx(`${ctx.brandName} selected invoices.xlsx`, res.lines, res.links, brandNames);
-    logActivity('bulk_excel', { count: res.found.length });
-    ctx.notify(`Downloaded ${res.found.length} invoices`);
+    trackDownload('Selected invoices', async (job) => {
+      const brandNames = Object.fromEntries(ctx.brands.map((b) => [b.id, b.name]));
+      job.step('build', `Building Excel · ${res.lines.length.toLocaleString('en-IN')} lines`); await job.paint();
+      downloadMasterXlsx(`${ctx.brandName} selected invoices.xlsx`, res.lines, res.links, brandNames);
+      job.step('save', 'Saving file'); await job.paint();
+      logActivity('bulk_excel', { count: res.found.length });
+      return `${res.found.length} invoices`;
+    });
   }
 
   const withPdf = res ? res.found.filter((r) => r.pdf).length : 0;

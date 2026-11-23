@@ -6,6 +6,7 @@ import { fetchAllLines, fetchDocLinks, downloadMasterXlsx, buildMasterSheet } fr
 import { downloadSalesTrendXlsx } from '../lib/salesTrendExcel.js';
 import { useLoad, LoadingCard, Empty, ErrorState, Icon, Count } from '../components/ui.jsx';
 import { Freshness } from '../components/SyncInfo.jsx';
+import { trackDownload } from '../components/DownloadProgress.jsx';
 
 /*
  * Sales report – same concept as the "SALES TREND" Google Sheet:
@@ -112,18 +113,24 @@ export default function SalesReport({ ctx }) {
   async function exportXlsx() {
     if (!R) return;
     setBusy(true);
-    try {
+    await trackDownload(`Sales report · ${mLabel}`, async (job) => {
       // Same layout as the boss's SALES TREND Google Sheet; brand logins only get their own rows.
+      job.step('load', 'Loading monthly totals');
       const end = iso(new Date(monthStart(month).getFullYear(), monthStart(month).getMonth() + 1, 0));
       const all = await rpc('rpt_trend', { p_from: '2000-01-01', p_to: end, p_brand: ctx.brand });
       const rows = wloc ? all.filter((r) => r.location === wloc) : all;
       const first = rows.reduce((m, r) => (String(r.month).slice(0, 10) < m ? String(r.month).slice(0, 10) : m), iso(monthStart(month)));
-      const lines = await fetchAllLines(supabase, { from: first, to: end, loc: wloc, brand: ctx.brand });
-      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+      job.step('load', 'Loading sales lines');
+      const lines = await fetchAllLines(supabase, { from: first, to: end, loc: wloc, brand: ctx.brand, onProgress: (d, t) => job.progress(d, t) });
+      job.step('load', 'Loading receiving-copy links');
+      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no), (d, t) => job.progress(d, t));
+      job.step('build', 'Building SALES TREND Excel · 5 tabs'); await job.paint();
       await downloadSalesTrendXlsx(rows, lines, links, { month, measure, brandName: ctx.brandName, buildMasterSheet });
+      job.step('save', 'Saving file'); await job.paint();
       logActivity('export', { page: 'sales-report', month });
-      ctx.notify('Sales report downloaded');
-    } catch (e) { ctx.notify(e.message || 'Download failed', true); } finally { setBusy(false); }
+      return `${lines.length.toLocaleString('en-IN')} sales lines`;
+    });
+    setBusy(false);
   }
 
   const pickRange = (key) => {
@@ -133,21 +140,22 @@ export default function SalesReport({ ctx }) {
   async function downloadLines() {
     if (!dFrom || !dTo || dFrom > dTo) { ctx.notify('Pick a valid From and To date', true); return; }
     setBusy(true);
-    try {
-      let lines = await fetchAllLines(supabase, { from: dFrom, to: dTo, loc: wloc, brand: ctx.brand });
+    await trackDownload('Line-wise sales data', async (job) => {
+      job.step('load', 'Loading sales lines');
+      let lines = await fetchAllLines(supabase, { from: dFrom, to: dTo, loc: wloc, brand: ctx.brand, onProgress: (d, t) => job.progress(d, t) });
       const q = prod.trim().toLowerCase();
       if (q) lines = lines.filter((l) => [l.item_name, l.item_code, l.item_group].some((x) => String(x || '').toLowerCase().includes(q)));
-      if (!lines.length) { ctx.notify('No sales lines for these filters', true); return; }
+      if (!lines.length) throw new Error('No sales lines for these filters');
       const brandNames = Object.fromEntries((ctx.brands || []).map((b) => [b.id, b.name]));
-      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no));
+      job.step('load', 'Loading receiving-copy links');
+      const links = await fetchDocLinks(supabase, lines.filter((l) => !l.is_return).map((l) => l.document_no), (d, t) => job.progress(d, t));
+      job.step('build', `Building Excel · ${lines.length.toLocaleString('en-IN')} lines`); await job.paint();
       downloadMasterXlsx(`${ctx.brandName} sales ${wloc || 'all'}${q ? ' ' + q : ''} ${dFrom} to ${dTo}.xlsx`, lines, links, brandNames);
+      job.step('save', 'Saving file'); await job.paint();
       logActivity('export', { page: 'sales-report-lines', from: dFrom, to: dTo, loc: wloc, product: q || null });
-      ctx.notify(`Downloaded ${lines.length} lines`);
-    } catch (e) {
-      ctx.notify(e.message, true);
-    } finally {
-      setBusy(false);
-    }
+      return `${lines.length.toLocaleString('en-IN')} lines`;
+    });
+    setBusy(false);
   }
   const dl = (
     <section className="card">
